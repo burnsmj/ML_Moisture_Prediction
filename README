@@ -1,1 +1,19 @@
 Description of code files found in this repository:
+
+Cleaning_Kernel_Comp_Data.Rmd
+  An R markdown file going through each of the steps from reading in a csv file to cleaning it of outliers 
+  (as of 1/8/2020, this is set to 3 standard deviations). It will also export the final cleaned version as a csv.
+
+Data_Partioner.R
+  R script that utilizes the caret program in R to create a training and test dataset of a given size.  Change p to an 
+  appropriate partition rate.  It will allow you to read in a csv file and will export both the training and test set as csv 
+  files to read into other algorithms.  It is recommended to clean the data set of outliers and duplicates before using this.
+  
+Duplicate_Remover.R
+  R script that will look through a dataset with a SampleID column and check to see if any of the names match the one before
+  it.  The dataset will need to be sorted before feeding into this program (as of 1/8/2020).  It will remove duplicate lines
+  that were scanned after their counterparts.  Note: it has not been attempted on a file that doesn't have a column for 
+  analysis.time, and it will not work if the names are not exactly the same (case sensitive, space sensitive, etc).
+  
+
+ 
