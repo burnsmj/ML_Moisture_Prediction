@@ -15,5 +15,36 @@ Duplicate_Remover.R
   that were scanned after their counterparts.  Note: it has not been attempted on a file that doesn't have a column for 
   analysis.time, and it will not work if the names are not exactly the same (case sensitive, space sensitive, etc).
   
+Moisture_Uptake_ML.Rmd
+  R markdown file that goes over some model selection based on traits and their interactions.  It also has some caret based 
+  machine learning models, but these did not work properly, and after this is when I started working with Matlab for 
+  regression tasks.
+  
+NIR_spectra_pls.Rmd
+  R markdown file that walks through the basics of using PLS to create a prediction model for moisture uptake from NIR 
+  spectra readings.  This file has been condensed to a R script that one can more easily cmnd+enter through.
+  
+Spectra_Moisture_Predictor.R
+  R script that is described above.  It will read in both a training csv file and a file to be predicted upon.  It goes 
+  through removing outliers and duplicates from the prediction set, and choosing the number of components.  At the end it 
+  will export a csv file with the original spectra readings as well as the moisture predictions. It also has the option to 
+  export a file of 40 evenly-spaced-throughout-the-moisture-prediction-range samples that we plan to cook for validation.
+  
+Trait_Simulator.Rmd
+  R markdown file creating a csv file of 3.2million individuals that were simulated based on WiDiv trait data.  As of 
+  1/8/2020 this was not used since we moved to more spectra oriented data, though we may recycle this file to simulate 
+  spectra data.
+  
+Kernel_comp_subsamp.Rmd
+  R markdown that performs the sample function as the Data_Partitioner.R file.
 
+moisture_pred_metric_analysis.Rmd
+  R markdown file that contains a function similar to the Spectra_Moisture_Predictor.R that is highly customizable, and 
+  instead of returning files with predictions, it will take a dataset, partition it, clean it, learn from itself, and then
+  analyze its job both through RMSE and R^2, which need to be specified.  At the end of the file there are parallel for 
+  loops that were used to analyze the best number of components to use.
+  
+mup_trait_heatmap.Rmd
+  R markdown file that was used to create a heatmap for the different traits and moisture uptake to look for patterns.  This
+  will most likely be used in the paper.
  
