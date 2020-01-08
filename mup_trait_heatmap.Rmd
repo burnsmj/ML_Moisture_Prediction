@@ -1,0 +1,51 @@
+---
+title: "Moisture Uptake / Trait Heat Map"
+author: "Michael Burns"
+date: "12/19/2019"
+output: html_document
+---
+
+```{r}
+library(ggplot2)
+library(RColorBrewer)
+```
+
+
+```{r}
+kernel_comp_data<-read.csv("/Users/michael/Desktop/Grad_School/Research/Datasets/Machine Learning/kernel_all_comp_cooking.csv")
+head(kernel_comp_data)
+```
+
+To make the heatmap work universally across the traits (from 1% to 85%) we will need to normalize it in a way for each trait.  To do this I will take each trait divided by the maximum value present.  Might need to subtract mean from value and divide by standard deviation.
+```{r}
+kernel_comp_proportion<-matrix(ncol = ncol(kernel_comp_data)-6, nrow = nrow(kernel_comp_data))
+colnames(kernel_comp_proportion)<-names(kernel_comp_data[7:17])
+
+for (c in 7:16) {
+  max_col_val<-max(kernel_comp_data[,c])
+  for(r in 1:nrow(kernel_comp_data)){
+    kernel_comp_proportion[r,(c-7)+1]<-kernel_comp_data[r,c]/max_col_val
+  }
+}
+
+kernel_comp_proportion[,11]<-round(kernel_comp_data$Moisture_Avg,2)
+
+```
+
+```{r}
+kernel_comp_moisture_sorted<-kernel_comp_data[order(kernel_comp_data$Moisture_Avg),]
+kernel_comp_clustered<-kernel_comp_moisture_sorted[,c(1:6,12,8,9,15,14,13,10,11,16,7,17)]
+```
+
+```{r}
+mycol <- colorRampPalette(c("#4575b4","#91bfdb","#e0f3f8","#fee090","#fc8d59","#d73027"))(256)
+
+stats::heatmap(t(as.matrix(kernel_comp_clustered[,c(7:17)])), 
+               scale = "row", 
+               col = mycol,
+               Colv = NA, 
+               Rowv = NA,
+               main = "Kernel Trait Heatmap",
+               labCol = F) # Colv and Rowv need to be set to NA so that they dont automatically reorder the heatmap.
+```
+

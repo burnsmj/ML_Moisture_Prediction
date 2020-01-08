@@ -1,0 +1,155 @@
+---
+title: "NIR Spectra PLS Analysis"
+author: "Michael Burns"
+date: "12/18/2019"
+output: html_document
+---
+
+On 12/17/19, Candy and I met with Dave from PepsiCo to discuss some stats work dealing with the NIR scanning traits.  We also go the wavelength readings from Art which contained every sample we ever scanned (just over 15,000), and the wavelength absorptions from 950-1650nm, averaged to every 5nm. Dave talked about possibly using PCA to determine which groupings of wavelengths would be the most informative since so many of them were so highly correlated.  Even the "uncorrelated" wavelengths had a fairly strong correlation.  
+
+The reason we are using the spectra info rather than the trait values given by the NIR is because of the amount of error possible when going from wavelength absorption to equation, then equation to trait, and trait to moisture uptake.  This should give us a more accurate model to use.  We hope that we can create this model for fast application, and then study the biology underlying the spectra to understand what the different peaks are referring to.  
+
+While working with Dave we used a Partial Least Squares Regression (PLSR) model to learn the data and make predictions.  PLS is a sort of hybrid of PCA and linear regression, where it wants to limit the number of components going into the model, while maintaining its predictive ability on the dataset.  When we created a model, it used 16 components, explained 70-80% (0.6 in the matlab gaussian model, and 0.3 in the model selected by R step) of the variance, and when used to make predictions, had an R^2 value of roughly 0.4 (NEED TO DETERMINE MATLABS AND R's).  Dave thinks we could get the predicted vs actual R^2 up to about 0.5 if we tweak some parameters.  This R Makrdown file is to mess around with the pls package that R has, and see what kind of information I can come up with.
+
+```{r}
+library(pls)
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+library(Hmisc)
+```
+
+```{r}
+nir_spectra<-read.csv("/Users/michael/Desktop/Grad_School/Research/Datasets/Machine Learning/Spectra_Data/NIR_spectra_w_moisture_uptake.csv", check.names = F)
+for(i in 3:ncol(nir_spectra)){
+  if(!is.double(nir_spectra[,i])){
+    nir_spectra[,i]<-as.numeric(as.character(nir_spectra[,i]))
+  }
+}
+head(nir_spectra)
+dim(nir_spectra)
+```
+
+Lets start some pls work.
+Most of what I will be doing is based on the pls vignette, which I will be using as a sort of walk through.
+
+Does the moisture content need to be transformed?
+```{r}
+hist(nir_spectra$Moisture_Avg)
+```
+The histogram looks fairly normal, so we will continue with the data as is for now.  If needed we can make a set of log-transformed moisture uptake values later and rerun it through. 
+
+Lets split up the data to make writing the formula easier.  Supposedly, have the predictors in a matrix and calling the matrix after the tilde will make it choose each column as a variable.
+```{r}
+spectra_readings<-as.matrix(nir_spectra[,c(4:144)])
+```
+
+```{r}
+moisture_spectra_model<-plsr(nir_spectra$Moisture_Avg~spectra_readings, ncomp = 141, validation = "CV")
+```
+
+
+Collecting info for plots
+```{r}
+R2_Y<-R2(moisture_spectra_model, estimate = "train")
+R2_Y_max<-max(R2_Y$val)
+R2_Y_mincomp<-R2_Y$val<0.8*R2_Y_max
+R2_Y_compnum<-sum(R2_Y_mincomp)+1
+
+RMSEP_mod<-RMSEP(moisture_spectra_model)
+RMSEP_val<-RMSEP_mod$val
+RMSEP_val_CV<-RMSEP_val[c(T,F)]
+RMSEP_min<-which.min(RMSEP_val_CV)-1 #corrects for intercept being considered in the RMSEP values list
+```
+
+
+Plotting important information
+```{r}
+plot(RMSEP_mod, legendpos = "topright", 
+     main = "RMSE vs Number of Components Used", 
+     ylab = "RMSE",
+     xlab = "Number of Components",
+     sub = paste("Minimum RMSE found with", RMSEP_min, "components", sep = " "),
+     col.sub = "blue")
+abline(v = RMSEP_min, col = "blue")
+
+plot(R2_Y, 
+     main = "R^2 vs Number of Components Used", 
+     ylab = "R^2",
+     xlab = "Number of Components",
+     sub = paste(round(0.8*R2_Y_max*100,1), "% of variation found with ", R2_Y_compnum, " components", sep = ""),
+     col.sub = "blue")
+abline(v = R2_Y_compnum, col = "blue")
+```
+
+
+Lets get a couple more opinions on the number of components to select
+```{r}
+ncomp_onesigma<-selectNcomp(moisture_spectra_model, 
+                            method = "onesigma", 
+                            plot = T, 
+                            xlim = c(0,15), 
+                            sub = paste("Variance Explained: ", 
+                                        round(R2_Y$val[selectNcomp(moisture_spectra_model,
+                                                                   method ="onesigma")+1],3)*100,"%", sep =""),
+                            col.sub = "blue")
+
+ncomp_permut<-selectNcomp(moisture_spectra_model, 
+                          method = "randomization", 
+                          plot = T, 
+                          xlim = c(0,15),
+                          sub = paste("Variance Explained: ", 
+                                      round(R2_Y$val[selectNcomp(moisture_spectra_model,
+                                                                   method ="randomization")+1],3)*100,"%", sep =""),
+                          col.sub = "blue")
+### +1 corrects for intercept being included in the R^2 dataset.
+```
+According to the selectNcomp function within pls, we should be choosing between 5 and 8 components.  These numbers have been saved in their respectivly named values.
+
+Try Making Predictions
+```{r}
+nir_test_spectra<-read.csv("/Users/michael/Desktop/Grad_School/Research/Datasets/Machine Learning/Spectra_Data/WiDiv_Dataset_Inliers.csv", check.names = F)
+nir_test_spectra_mat<-as.matrix(nir_test_spectra[,c(2:142)])
+```
+
+```{r}
+moisture_predictions_pls<-drop(predict(moisture_spectra_model, ncomp = c(5,10,14,14), newdata = nir_test_spectra_mat))
+num_of_components<-c('5 components', '10 components', '14 components', '14 components')
+```
+
+Plots of Predictions vs Actual
+```{r}
+for(i in 1:4){
+  plot(nir_test_spectra$Moisture_Avg, moisture_predictions_pls[,i],
+      ylab = "Predicted",
+      xlab = "Actual",
+      sub = paste("R^2: ",round(caret::R2(moisture_predictions_pls[,i], nir_test_spectra$Moisture_Avg),3), 
+                  sep =""),
+      col.sub = "Blue",
+      main = paste("Moisture uptake predicted vs actual using ", num_of_components[i], sep = ""))
+}
+```
+
+Lets create a text file that contains some statistics about each of the different predictors.
+```{r}
+sink("/Users/michael/Desktop/Grad_School/Research/Datasets/Machine Learning/Spectra_Data/Spectra_80_Prediction_Stats.txt")
+  for(i in 1:4){
+    error<-moisture_predictions_pls[,i]-nir_test_spectra$Moisture_Avg
+    cat("\nSpectra Based Prediction Stats for ",num_of_components[i], ":\n", sep = "")
+    cat("R^2: ",round(caret::R2(moisture_predictions_pls[,i], nir_test_spectra$Moisture_Avg),4), "\n") #R^2
+    cat("RMSE: ", round(sqrt(mean(error^2)),4), "\n")
+    cat("Max(Abs(Error)): ", round(max(abs(error)),4), "\n")
+    cat("Min(Abs(Error)): ", round(min(abs(error)),4), "\n")
+    cat("Range of Error: ", round(max(error)-min(error),4), "\n")
+  }
+sink()
+closeAllConnections()
+```
+
+
+
+
+```{r}
+write.csv(moisture_predictions_pls, "/Users/michael/Desktop/Grad_School/Research/Datasets/Machine Learning/Spectra_Data/Predictions/WiDiv_Spectra_Predictions.csv", row.names = F)
+```
+

@@ -1,0 +1,52 @@
+---
+title: "Cleaning_Kernel_Comp_Data"
+author: "Michael Burns"
+date: "12/13/2019"
+output: html_document
+---
+
+The kernel composition data from Mark has been cleaned up pretty well to remove samples that don't have any moisture uptake values and the like.  One thing it hasn't gone through is cleaning for samples that are outliers.  These values are very hard for machine learning models to predict, but also increase the generalization of the model.  Removing them could be either a good idea, or a bad one.  It appears that our dataset suffers pretty bad from lack of data.  Any time we incresase the number of samples, our R-squared tends to increase greatly, and RMSE for the most part drops.  We also get a much better fit to our predicted vs actual plot.
+
+```{r}
+library(ggplot2)
+library(dplyr)
+```
+
+```{r}
+outlier_rm_3sd<-function(data_w_outlier){
+  inliers<-na.omit(data_w_outlier)
+
+  for(q in 1:ncol(inliers)){
+    if(is.double(inliers[,q])){
+      data_mean<-mean(inliers[,q])
+      data_sd<-sd(inliers[,q])
+      for(n in 1:length(inliers[,1])){
+        if(inliers[n,q]>(data_mean-(3*data_sd)) & inliers[n,q]<(data_mean+(3*data_sd))){
+          inliers[n,q]<-inliers[n,q]
+        }else{inliers[n,q]<-NA}
+      }
+    }
+  }
+  na.omit(inliers)
+}
+```
+
+```{r}
+kernel_comp<-read.csv("/Users/michael/Desktop/Grad_School/Research/Datasets/Machine Learning/kernel_comp_all_clean.csv")
+head(kernel_comp)
+dim(kernel_comp)
+sum(is.na(kernel_comp))
+```
+
+```{r}
+kernel_comp_inliers<-outlier_rm_3sd(kernel_comp)
+head(kernel_comp_inliers)
+dim(kernel_comp_inliers)
+sum(is.na(kernel_comp_inliers))
+```
+
+```{r}
+write.csv(kernel_comp_inliers, file = "/Users/michael/Desktop/Grad_School/Research/Datasets/Machine Learning/kernel_comp_all_inliers.csv", row.names = F)
+```
+
+

@@ -1,0 +1,131 @@
+---
+title: "NIR_PLS_Moisture_CompNum"
+author: "Michael Burns"
+date: "1/6/2020"
+output: html_document
+---
+
+Loading required packages
+```{r}
+library(pls)
+library(dplyr)
+library(foreach)
+library(doParallel)
+```
+
+Loading the dataset
+```{r}
+moisture_spec_data<-read.csv("/Users/michael/Desktop/Grad_School/Research/Datasets/Machine Learning/Spectra_Data/spectra_full_learning_set.csv", check.names = F)
+head(moisture_spec_data)
+```
+
+This function has been adapted from the function used in the NIR_Trait_Equations.Rmd file.  
+```{r}
+Moisture_Prediction_Metric_Function<-function(dataset,column_of_interest = 3, p = 0.90, metric = "RMSE", R2_target = 0.8, validation = "CV", ncomp = 15){
+  #set.seed(1) ### Seed can be added to the function to provide a guarentee that the model will always work the same way.
+  #####
+  # Loading dataset and partitioning
+  #####
+  trait_spec_data<-dataset
+  trait_spec_data_index<-caret::createDataPartition(trait_spec_data[,column_of_interest], p=p, list = FALSE)
+  trait_spec_data_test<-trait_spec_data[-trait_spec_data_index,]
+  trait_spec_data_train<-trait_spec_data[trait_spec_data_index,]
+  
+  #####
+  # Creating spectra matrices
+  #####
+  training_spectra_readings<-as.matrix(trait_spec_data_train[,c(4:144)]) #having the spectra in a matrix will allow a cleaner code when calling them as predictors.
+  dim(training_spectra_readings)
+  test_spectra_readings<-as.matrix(trait_spec_data_test[,c(4:144)]) #having the spectra in a matrix will allow a cleaner code when calling them as predictors.
+  dim(test_spectra_readings)
+  
+  #####
+  # Creating the model
+  #####
+  spectra_model<-plsr(log(trait_spec_data_train[,column_of_interest])~training_spectra_readings, validation = validation)
+  
+  #####
+  # Metrics for determining number of components to use
+  #####
+  R2_Y<-R2(spectra_model, estimate = "train")
+  R2_Y_max<-max(R2_Y$val)
+  R2_Y_mincomp<-R2_Y$val<R2_target*R2_Y_max
+  R2_Y_compnum<-sum(R2_Y_mincomp)+1
+  RMSEP_mod<-RMSEP(spectra_model)
+  RMSEP_val<-RMSEP_mod$val
+  RMSEP_val_CV<-RMSEP_val[c(T,F)]
+  RMSEP_min<-which.min(RMSEP_val_CV)-1 # -1 corrects for intercept being considered in the RMSEP values list
+  
+  #remsp_plot<-plot(RMSEP_mod, legendpos = "topright", 
+  #   main = "RMSE vs Number of Components Used", 
+  #   ylab = "RMSE",
+  #   xlab = "Number of Components",
+  #   sub = paste("Minimum RMSE found with", RMSEP_min, "components", sep = " "),
+  #   col.sub = "red")
+  #abline(v = RMSEP_min, col = "red")
+  #abline(v = R2_Y_compnum, col = "blue")
+  
+  #r2_plot<-plot(R2_Y, 
+  #   main = "R^2 vs Number of Components Used", 
+  #   ylab = "R^2",
+  #   xlab = "Number of Components",
+  #   sub = paste(round(0.8*R2_Y_max*100,1), "% of variation found with ", R2_Y_compnum, " components", sep = ""),
+  #   col.sub = "blue")
+  #abline(v = R2_Y_compnum, col = "blue")
+  #abline(v = RMSEP_min, col = "red")
+  
+  #remsp_plot
+  #r2_plot
+  
+  #cat("Number of Components Based on R^2: \n", R2_Y_compnum, "\n","Number of Components Based on RMSEP: \n", RMSEP_min, sep = "")
+  #ncomp<-as.numeric(readline(prompt = "Number of Components to Use:"))
+  
+  #####
+  # Prediction model
+  #####
+  component_predictions_pls<-drop(predict(spectra_model, ncomp = ncomp, newdata = test_spectra_readings))
+  component_predictions_pls_transformed<-exp(component_predictions_pls)
+  
+  #####
+  # Which metric to print
+  #####
+  if(metric == "RMSE"){
+  sqrt(mean((trait_spec_data_test[,column_of_interest]-component_predictions_pls_transformed)^2))
+  }
+    else{
+      if(metric == "R2"){
+        caret::R2(component_predictions_pls_transformed, trait_spec_data_test[,column_of_interest])
+      }
+        else{print("Unsupported metric, choose either RMSE or R2")}
+    }
+}
+```
+
+Looking at the effect of the number of components RMSE
+```{r}
+registerDoParallel(cores = 5)
+  RMSE_mean_data_c <- foreach(c = 1:25, .combine = c) %dopar%{
+    mean(replicate(50,Moisture_Prediction_Metric_Function(moisture_spec_data, ncomp = c, metric = "RMSE")))
+  }
+  
+RMSE_mean_data_c
+plot(RMSE_mean_data_c, main = "Average RMSE of 50 trials at various ncomp values", ylab = "Average RMSE", xlab = "Ncomp Value")
+#for foreach help, see: https://cran.r-project.org/web/packages/foreach/vignettes/foreach.pdf
+```
+
+Looking at the effect of the number of components R^2
+```{r}
+registerDoParallel(cores = 5)
+  R2_mean_data_c <- foreach(c = 1:25, .combine = c) %dopar%{
+    mean(replicate(50,Moisture_Prediction_Metric_Function(moisture_spec_data, ncomp = c, metric = "R2")))
+  }
+  
+R2_mean_data_c
+plot(R2_mean_data_c, main = "Average R^2 of 50 trials at various ncomp values", ylab = "Average R^2", xlab = "Ncomp Value")
+#for foreach help, see: https://cran.r-project.org/web/packages/foreach/vignettes/foreach.pdf
+```
+
+Use coef.mvr to get the coefficients used in the pls model.
+
+
+

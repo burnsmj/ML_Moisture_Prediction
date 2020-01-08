@@ -1,0 +1,208 @@
+---
+title: "Moisture Uptake Machine Learning"
+author: "Michael Burns"
+date: "11/20/2019"
+output: html_document
+---
+
+```{r loading_packages}
+library(dplyr)
+library(lme4)
+library(ggplot2)
+library(caret)
+```
+
+```{r loading_data}
+cook_comp_data<-read.csv("/Users/michael/Desktop/Grad_School/Research/Datasets/Machine Learning/Moisture_Uptake_Data.csv")
+cook_comp_data<-na.omit(cook_comp_data)
+cook_comp_data$Moisture_Avg<-cook_comp_data$Moisture_Avg*100
+head(cook_comp_data)
+```
+
+
+```{r}
+mavg_mod<-lm(Moisture_Avg~Protein_As_is+Starch_As_is+Fiber_As_is+Fat_As_is+Ash_As_is + Protein_As_is:Starch_As_is+Starch_As_is:Fiber_As_is+Starch_As_is:Fat_As_is+Ash_As_is:Protein_As_is+Ash_As_is:Starch_As_is+Ash_As_is:Fiber_As_is+Protein_As_is:Fiber_As_is+Protein_As_is:Fat_As_is, data = cook_comp_data)
+AIC(mavg_mod)
+step(mavg_mod, direction = "both") #AIC
+#Theres a discrepancy between the AIC values found below and step AIC values.
+
+#step(mavg_mod, direction = "both", k = log(length(cook_comp_data[,1]))) #BIC
+```
+
+```{r}
+dim(cook_comp_data)
+mup_index<-createDataPartition(cook_comp_data$Genotype, p=0.50, list = FALSE)
+mup_test<-cook_comp_data[-mup_index,]
+mup_train<-cook_comp_data[mup_index,]
+
+dim(mup_test)
+dim(mup_train)
+```
+
+```{r}
+str(mup_train)
+head(mup_train)
+summary(mup_train)
+```
+
+```{r}
+x<-mup_train[,8:12]
+y<-mup_train[,7]
+
+#Univariate Plots:
+boxplot(x,y) #Visualize attributes
+plot(y) #Class breakdown
+
+#Multivariate Plots
+for(i in 8:12){
+  print(ggplot(data = mup_test)+
+    geom_point(aes(x=mup_test[,i], y=Moisture_Avg), color = mup_test$Location)+
+    geom_smooth(aes(x=mup_test[,i], y=Moisture_Avg),method = "lm")+
+    xlab(names(mup_test[i])))
+}
+```
+
+```{r}
+control<-trainControl(method = "cv", number = 10)
+metric<-"MAE"
+```
+
+```{r}
+set.seed(7)
+fit.lm<-train(Moisture_Avg~
+                 Protein_As_is+ 
+                 Starch_As_is+ 
+                 Fiber_As_is+ 
+                 Fat_As_is+
+                 Ash_As_is+
+                 Starch_As_is:Fat_As_is+
+                 Starch_As_is:Ash_As_is+ 
+                 Protein_As_is:Fiber_As_is, 
+               data = mup_train, method = "lm", metric = metric, trControl = control)
+set.seed(7)
+fit.cart<-train(Moisture_Avg~
+                 Protein_As_is+ 
+                 Starch_As_is+ 
+                 Fiber_As_is+ 
+                 Fat_As_is+
+                 Ash_As_is+
+                 Starch_As_is:Fat_As_is+
+                 Starch_As_is:Ash_As_is+ 
+                 Protein_As_is:Fiber_As_is, 
+               data = mup_train, method = "rpart", metric = metric, trControl = control)
+set.seed(7)
+fit.knn<-train(Moisture_Avg~
+                 Protein_As_is+ 
+                 Starch_As_is+ 
+                 Fiber_As_is+ 
+                 Fat_As_is+
+                 Ash_As_is+
+                 Starch_As_is:Fat_As_is+
+                 Starch_As_is:Ash_As_is+ 
+                 Protein_As_is:Fiber_As_is, 
+               data = mup_train, method = "knn", metric = metric, trControl = control)
+set.seed(7)
+fit.svm<-train(Moisture_Avg~
+                 Protein_As_is+ 
+                 Starch_As_is+ 
+                 Fiber_As_is+ 
+                 Fat_As_is+
+                 Ash_As_is+
+                 Starch_As_is:Fat_As_is+
+                 Starch_As_is:Ash_As_is+ 
+                 Protein_As_is:Fiber_As_is, 
+               data = mup_train, method = "svmRadial", metric = metric, trControl = control)
+set.seed(7)
+fit.rf<-train(Moisture_Avg~
+                 Protein_As_is+ 
+                 Starch_As_is+ 
+                 Fiber_As_is+ 
+                 Fat_As_is+
+                 Ash_As_is+
+                 Starch_As_is:Fat_As_is+
+                 Starch_As_is:Ash_As_is+ 
+                 Protein_As_is:Fiber_As_is, 
+               data = mup_train, method = "rf", metric = metric, trControl = control)
+```
+___
+```{r}
+results<-resamples(list(lm=fit.lm,cart=fit.cart,knn=fit.knn,svm=fit.svm,rf=fit.rf))
+summary(results)
+```
+
+```{r}
+dotplot(results)
+```
+
+```{r}
+print(fit.rf$results$MAE[3])
+print(fit.rf$results$MAESD[3])
+```
+
+###
+# Check Inputs for Predict function
+###
+```{r}
+predictions<-predict(fit.rf,mup_test)
+
+print("Mean Absolute Error on Test Partition:")
+MAE_test<-mean(abs(mup_test$Moisture_Avg-predictions)) #MAE of test
+MAE_test
+
+print("SD of MAE of test away from training:")
+(MAE_test-fit.rf$results$MAE[3])/fit.rf$results$MAESD[3]
+
+print("Root Mean Square Error on Test Partition:")
+MAE_test<-sqrt(mean((mup_test$Moisture_Avg-predictions)^2)) #MAE of test
+MAE_test
+
+print("SD of MAE of test away from training:")
+(MAE_test-fit.rf$results$RMSE[3])/fit.rf$results$RMSESD[3]
+
+plot(mup_test$Moisture_Avg, predictions)
+```
+
+p = 0.8 rf
+MAE
+[1] 1.429555
+MAESD
+[1] 0.1725958
+
+[1] "Mean Absolute Error on Test Partition:"
+[1] 1.146877
+[1] "SD of MAE of test away from training:"
+[1] -2.137672
+[1] "Root Mean Square Error on Test Partition:"
+[1] 1.390385
+[1] "SD of MAE of test away from training:"
+[1] -2.617399
+___
+p=0.2 rf
+MAE
+[1] 2.074075
+MAESD
+[1] 0.4532878
+
+[1] "Mean Absolute Error on Test Partition:"
+[1] 1.68356
+[1] "SD of MAE of test away from training:"
+[1] -0.8615158
+[1] "Root Mean Square Error on Test Partition:"
+[1] 2.170236
+[1] "SD of MAE of test away from training:"
+[1] -0.7347409
+___
+p=0.5
+MAE
+[1] 1.751762
+MAESD
+[1] 0.3390201
+
+[1] "Mean Absolute Error on Test Partition:"
+[1] 1.518826
+[1] "SD of MAE of test away from training:"
+[1] -0.687087
+[1] "Root Mean Square Error on Test Partition:"
+[1] 1.969078
+[1] "SD of MAE of test away from training:"
+[1] -0.5625143

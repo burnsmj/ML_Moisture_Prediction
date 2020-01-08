@@ -1,0 +1,39 @@
+---
+title: "Subsampling Kernel Comp Data"
+author: "Michael Burns"
+date: "12/13/2019"
+output: html_document
+---
+
+This is to randomly subsample individuals from the kernel composition dataset.I have created a dataset that has the same data repeated three times. The reason I did this was to incease the number of datapoints we have since this will greatly improve our model. The problem we run into is that there is a really high risk of overfitting the data. 
+
+From looking online, duplicates in data a fine, as long as they based on real world scenarios.  
+
+When I trained a model on a fully cleaned up, duplicate removed subsample of the kernel comp dataset, I got RMSE values of ~0.024 and R^2 of ~0.3.  When I left the duplicates in, these values changes to roughly 0.017 and 0.6 respectively.  When I ran the triplicate dataset (with original duplicates present), the values were 0.008 and 0.9 respectively. The could definitely be due to overfitting, though if the data is real world enough, and with the way the duplicates are set up, I suppose it is possible that the model is just getting better with more data to generalize it.  
+
+I am going to use this file to subsample a small portion (say 25%) out of the dataset with duplicates, triplicate the training set, and then test using the subsample I took out.  I will also use this subsample to test a model made without triplicating (but with the subsample present in the data), and a model that hasnt been triplicated and doesnt contain the subsample.
+
+```{r}
+library(caret)
+```
+
+```{r}
+kernel_comp_data<-read.csv("/Users/michael/Desktop/Grad_School/Research/Datasets/Machine Learning/Spectra_Data/NIR_spectra_w_moisture_uptake.csv")
+head(kernel_comp_data)
+summary(kernel_comp_data)
+dim((kernel_comp_data))
+str(kernel_comp_data)
+```
+
+```{r}
+mup_index<-createDataPartition(kernel_comp_data$Moisture_Avg, p=0.75, list = FALSE)
+mup_test<-kernel_comp_data[-mup_index,]
+mup_train<-kernel_comp_data[mup_index,]
+```
+
+```{r}
+write.csv(mup_test, file = "spectra_test_set.csv")
+write.csv(mup_train, file = "spectra_comp_train_set.csv")
+```
+
+Use 10 cross validations regardless of dataset size, always use top performing model.
