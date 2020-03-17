@@ -6,30 +6,41 @@ output: html_document
 ---
 
 Loading required packages
-```{r}
+```{r packages}
 library(pls)
 library(dplyr)
 library(foreach)
 library(doParallel)
+library(beepr)
+library(GauPro)
 ```
 
 Loading the dataset
-```{r}
-moisture_spec_data<-read.csv("/Users/michael/Desktop/Grad_School/Research/Datasets/Machine Learning/Spectra_Data/spectra_full_learning_set.csv", check.names = F)
+```{r loading_data}
+trait_spec_data<-read_xlsx("../Data/Spectra_Data/spectra_learning_sets.xlsx")
+moisture_spec_data <- trait_spec_data[,c(1:2,165,24:164)]
 head(moisture_spec_data)
 ```
 
+
 This function has been adapted from the function used in the NIR_Trait_Equations.Rmd file.  
-```{r}
-Moisture_Prediction_Metric_Function<-function(dataset,column_of_interest = 3, p = 0.90, metric = "RMSE", R2_target = 0.8, validation = "CV", ncomp = 15){
-  #set.seed(1) ### Seed can be added to the function to provide a guarentee that the model will always work the same way.
+```{r metrics_function}
+dataset <- moisture_spec_data
+column_of_interest <- 3
+p <- 0.9
+validation <- "CV"
+ncomp <- 15
+
+
+Moisture_Prediction_Metric_Function<-function(dataset,column_of_interest = 3, p = 0.90, metric = "RMSE", validation = "CV", ncomp = 15){
+
   #####
   # Loading dataset and partitioning
   #####
   trait_spec_data<-dataset
-  trait_spec_data_index<-caret::createDataPartition(trait_spec_data[,column_of_interest], p=p, list = FALSE)
-  trait_spec_data_test<-trait_spec_data[-trait_spec_data_index,]
-  trait_spec_data_train<-trait_spec_data[trait_spec_data_index,]
+  trait_spec_data_index<-caret::createDataPartition(trait_spec_data[[column_of_interest]], p=p, list = FALSE)
+  trait_spec_data_test<-as.data.frame(trait_spec_data[-trait_spec_data_index,])
+  trait_spec_data_train<-as.data.frame(trait_spec_data[trait_spec_data_index,])
   
   #####
   # Creating spectra matrices
@@ -42,59 +53,23 @@ Moisture_Prediction_Metric_Function<-function(dataset,column_of_interest = 3, p 
   #####
   # Creating the model
   #####
-  spectra_model<-plsr(log(trait_spec_data_train[,column_of_interest])~training_spectra_readings, validation = validation)
-  
-  #####
-  # Metrics for determining number of components to use
-  #####
-  R2_Y<-R2(spectra_model, estimate = "train")
-  R2_Y_max<-max(R2_Y$val)
-  R2_Y_mincomp<-R2_Y$val<R2_target*R2_Y_max
-  R2_Y_compnum<-sum(R2_Y_mincomp)+1
-  RMSEP_mod<-RMSEP(spectra_model)
-  RMSEP_val<-RMSEP_mod$val
-  RMSEP_val_CV<-RMSEP_val[c(T,F)]
-  RMSEP_min<-which.min(RMSEP_val_CV)-1 # -1 corrects for intercept being considered in the RMSEP values list
-  
-  #remsp_plot<-plot(RMSEP_mod, legendpos = "topright", 
-  #   main = "RMSE vs Number of Components Used", 
-  #   ylab = "RMSE",
-  #   xlab = "Number of Components",
-  #   sub = paste("Minimum RMSE found with", RMSEP_min, "components", sep = " "),
-  #   col.sub = "red")
-  #abline(v = RMSEP_min, col = "red")
-  #abline(v = R2_Y_compnum, col = "blue")
-  
-  #r2_plot<-plot(R2_Y, 
-  #   main = "R^2 vs Number of Components Used", 
-  #   ylab = "R^2",
-  #   xlab = "Number of Components",
-  #   sub = paste(round(0.8*R2_Y_max*100,1), "% of variation found with ", R2_Y_compnum, " components", sep = ""),
-  #   col.sub = "blue")
-  #abline(v = R2_Y_compnum, col = "blue")
-  #abline(v = RMSEP_min, col = "red")
-  
-  #remsp_plot
-  #r2_plot
-  
-  #cat("Number of Components Based on R^2: \n", R2_Y_compnum, "\n","Number of Components Based on RMSEP: \n", RMSEP_min, sep = "")
-  #ncomp<-as.numeric(readline(prompt = "Number of Components to Use:"))
+  spectra_model<-plsr(trait_spec_data_train[[column_of_interest]]~training_spectra_readings, validation = validation)
   
   #####
   # Prediction model
   #####
   component_predictions_pls<-drop(predict(spectra_model, ncomp = ncomp, newdata = test_spectra_readings))
-  component_predictions_pls_transformed<-exp(component_predictions_pls)
+  #component_predictions_pls_transformed<-component_predictions_pls
   
   #####
   # Which metric to print
   #####
   if(metric == "RMSE"){
-  sqrt(mean((trait_spec_data_test[,column_of_interest]-component_predictions_pls_transformed)^2))
+  sqrt(mean((trait_spec_data_test[,column_of_interest]-component_predictions_pls)^2))
   }
     else{
       if(metric == "R2"){
-        caret::R2(component_predictions_pls_transformed, trait_spec_data_test[,column_of_interest])
+        caret::R2(component_predictions_pls, trait_spec_data_test[,column_of_interest])
       }
         else{print("Unsupported metric, choose either RMSE or R2")}
     }
@@ -102,7 +77,7 @@ Moisture_Prediction_Metric_Function<-function(dataset,column_of_interest = 3, p 
 ```
 
 Looking at the effect of the number of components RMSE
-```{r}
+```{r effect_of_ncomp_on_rmse}
 registerDoParallel(cores = 5)
   RMSE_mean_data_c <- foreach(c = 1:25, .combine = c) %dopar%{
     mean(replicate(50,Moisture_Prediction_Metric_Function(moisture_spec_data, ncomp = c, metric = "RMSE")))
@@ -114,7 +89,7 @@ plot(RMSE_mean_data_c, main = "Average RMSE of 50 trials at various ncomp values
 ```
 
 Looking at the effect of the number of components R^2
-```{r}
+```{r effect_of_ncomp_on_r2}
 registerDoParallel(cores = 5)
   R2_mean_data_c <- foreach(c = 1:25, .combine = c) %dopar%{
     mean(replicate(50,Moisture_Prediction_Metric_Function(moisture_spec_data, ncomp = c, metric = "R2")))
@@ -125,7 +100,48 @@ plot(R2_mean_data_c, main = "Average R^2 of 50 trials at various ncomp values", 
 #for foreach help, see: https://cran.r-project.org/web/packages/foreach/vignettes/foreach.pdf
 ```
 
+```{r bootstrapping_model_rmse, cache = TRUE}
+model_rmse_results <- vector(length = 1000)
+pb <- progress_bar$new(total = 1000)
+for(i in 1:1000){
+  model_rmse_results[i] <- Moisture_Prediction_Metric_Function(moisture_spec_data)
+  pb$tick()
+}
+
+sink(file = "../Spectra/Results/PLS_Bootstrap_RMSE.txt")
+cat("\nMean:\n", mean(model_rmse_results),"\n")
+cat("\nMedian:\n", median(model_rmse_results), "\n")
+cat("\nStandard Deviation:\n", sd(model_rmse_results), "\n")
+sink()
+closeAllConnections()
+png(filename = "../Spectra/Results/PLS_Bootstrap_RMSE.png")
+boxplot(model_rmse_results)
+dev.off()
+```
+
+```{r bootstrapping_model_r2, cache = TRUE}
+model_r2_results <- vector(length = 1000)
+pb <- progress_bar$new(total = 1000)
+for(i in 1:1000){
+  model_r2_results[i] <- Moisture_Prediction_Metric_Function(moisture_spec_data, metric = "R2")
+  pb$tick()
+}
+
+sink(file = "../Spectra/Results/PLS_Bootstrap_R2.txt")
+cat("\nMean:\n", mean(model_r2_results),"\n")
+cat("\nMedian:\n", median(model_r2_results), "\n")
+cat("\nStandard Deviation:\n", sd(model_r2_results), "\n")
+sink()
+closeAllConnections()
+png(filename = "../Spectra/Results/PLS_Bootstrap_R2.png")
+boxplot(model_r2_results)
+dev.off()
+```
+
+
+
 Use coef.mvr to get the coefficients used in the pls model.
+
 
 
 
