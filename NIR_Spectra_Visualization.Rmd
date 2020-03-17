@@ -1,0 +1,52 @@
+---
+title: "NIR_Spectra_Trial"
+author: "Michael Burns"
+date: "12/17/2019"
+output: html_document
+---
+
+```{r}
+library(dplyr)
+library(ggplot2)
+```
+
+```{r}
+nir_spectra<-read.csv("/Users/michael/Desktop/Grad_School/Research/Datasets/NIR/NIR_EMS_Dataset/15000_corn_hirsch.csv", check.names = F)
+```
+
+```{r}
+dim(nir_spectra)
+head(nir_spectra)
+```
+
+```{r}
+spectra_sub<-nir_spectra[c(1:10),]
+dim(spectra_sub)
+```
+
+```{r}
+wavelengths<-colnames(nir_spectra)[2:ncol(nir_spectra)]
+length(wavelengths)
+```
+
+```{r}
+spectra_sub_t<-t(spectra_sub)
+```
+
+```{r}
+plot(colnames(spectra_sub[,c(2:142)]),spectra_sub[1,c(2:142)], type = "l", col="black", main = "NIR Spectra of Various Genetic Lines", ylab = "Absorbance", xlab = "Wavelength (cm^-1)")
+  lines(colnames(spectra_sub[,c(2:142)]),spectra_sub[2,c(2:142)], type = "l", col="blue")
+  lines(colnames(spectra_sub[,c(2:142)]),spectra_sub[3,c(2:142)], type = "l", col="red")
+  lines(colnames(spectra_sub[,c(2:142)]),spectra_sub[4,c(2:142)], type = "l", col="yellow")
+  lines(colnames(spectra_sub[,c(2:142)]),spectra_sub[5,c(2:142)], type = "l", col="light blue")
+  lines(colnames(spectra_sub[,c(2:142)]),spectra_sub[6,c(2:142)], type = "l", col="dark green")
+  lines(colnames(spectra_sub[,c(2:142)]),spectra_sub[7,c(2:142)], type = "l", col="orange")
+  lines(colnames(spectra_sub[,c(2:142)]),spectra_sub[8,c(2:142)], type = "l", col="pink")
+  lines(colnames(spectra_sub[,c(2:142)]),spectra_sub[9,c(2:142)], type = "l", col="purple")
+  lines(colnames(spectra_sub[,c(2:142)]),spectra_sub[10,c(2:142)], type = "l", col="gray")
+```
+
+
+
+
+
