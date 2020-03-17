@@ -12,12 +12,13 @@ library(Hmisc)
 #####
 # Loading Training Set
 #####
-nir_training_spectra<-read.csv("/Users/michael/Desktop/Grad_School/Research/Datasets/Machine Learning/Spectra_Data/NIR_spectra_w_moisture_uptake.csv", check.names = F)
-
+nir_training_spectra_full<-read_xlsx("Data/Spectra_Data/spectra_learning_sets.xlsx")
+nir_training_spectra <- nir_training_spectra_full[,-c(3:23,145)]
+head(nir_training_spectra)
 #####
 # Cleaning Prediction Set
 #####
-data_w_outlier<-read.csv("/Users/michael/Desktop/Grad_School/Research/Datasets/Machine Learning/Spectra_Data/WiDiv_Spectra_w_Time.csv", check.names = F)
+data_w_outlier<-read_csv("Data/Spectra_Data/WiDiv_Spectra_w_Time.csv")
 
 outlier_rm<-function(data_w_outlier){
   inliers<-na.omit(data_w_outlier)
@@ -60,7 +61,7 @@ dim(dataset_sorted)
 #####
 # PLS Learning
 #####
-spectra_readings<-as.matrix(nir_training_spectra[,c(4:144)]) #having the spectra in a matrix will allow a cleaner code when calling them as predictors.
+spectra_readings<-as.matrix(nir_training_spectra[,c(3:143)]) #having the spectra in a matrix will allow a cleaner code when calling them as predictors.
 moisture_spectra_model<-plsr(nir_training_spectra$Moisture_Avg~spectra_readings, ncomp = 141, validation = "CV")
 
 #####
@@ -83,6 +84,7 @@ plot(RMSEP_mod, legendpos = "topright",
      sub = paste("Minimum RMSE found with", RMSEP_min, "components", sep = " "),
      col.sub = "blue")
 abline(v = RMSEP_min, col = "blue")
+abline(v = RMSEP_min+10, col = 'red')
 
 plot(R2_Y, 
      main = "R^2 vs Number of Components Used", 
@@ -91,6 +93,7 @@ plot(R2_Y,
      sub = paste(round(0.8*R2_Y_max*100,1), "% of variation found with ", R2_Y_compnum, " components", sep = ""),
      col.sub = "blue")
 abline(v = R2_Y_compnum, col = "blue")
+abline(v = RMSEP_min+10, col = 'red')
 
 ncomp_onesigma<-selectNcomp(moisture_spectra_model, 
                             method = "onesigma", 
@@ -128,21 +131,31 @@ moisture_predictions_w_spectra<-cbind(dataset_sorted,moisture_predictions_pls)
 moisture_predictions_w_spectra_reordered<-moisture_predictions_w_spectra[,c(1,144,2:143)]
 write.csv(moisture_predictions_w_spectra_reordered, "/Users/michael/Desktop/Grad_School/Research/Datasets/Machine Learning/Spectra_Data/Predictions/WiDiv_Spectra_Predictions.csv", row.names = F)
 
+
 #####
 # Picking 40 Individuals
 #####
 moisture_predictions_w_spectra_reordered_sorted<-moisture_predictions_w_spectra_reordered[order(moisture_predictions_w_spectra_reordered$moisture_predictions_pls),]
 pick_every<-nrow(moisture_predictions_w_spectra_reordered_sorted)/40
 samples_to_use<-as.matrix(moisture_predictions_w_spectra_reordered_sorted[c(T,rep(F,pick_every)),c("SampleID","moisture_predictions_pls")])
-
 write.csv(samples_to_use, "/Users/michael/Desktop/Grad_School/Research/Datasets/Machine Learning/Spectra_Data/Predictions/WiDiv_Samples_to_Cook.csv", row.names = F)
-
 
 
 #####
 # Extras
 #####
 hist(moisture_predictions_pls)
+
+
+samples_to_use$moisture_predictions_pls <- as.numeric(samples_to_use$moisture_predictions_pls)
+samples_to_use[,moisture_predictions_pls]
+is.matrix(samples_to_use)
+as.numeric(samples_to_use[,2])
+ggplot()+
+  geom_histogram(data = moisture_predictions_w_spectra, aes(x = moisture_predictions_pls))+
+  geom_rug(aes(x = as.numeric(samples_to_use[,2]), color = "red"))+
+  xlab("Moisture Uptake")+
+  labs(title = "Predicted Moisture Uptake of WiDiv Samples")
 
 
 
