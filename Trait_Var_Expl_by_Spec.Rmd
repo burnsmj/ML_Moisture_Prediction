@@ -1,0 +1,102 @@
+---
+title: "Determining Variance of Trait Data Explained by Spectra"
+author: "Michael Burns"
+date: "1/29/2020"
+output: html_document
+---
+
+The purpose of this file is to determine how much variance is in the trait data, and how much of it is explained by the spectra data.  This was an idea given to Candy and I by Nathan Miller.
+
+Load important packages
+```{r Packages}
+library(lme4)
+library(readxl)
+library(tidyverse)
+```
+
+Load dataset
+```{r Load_data}
+spectra_trait_data <- read_xlsx("../Data/Spectra_Data/spectra_learning_sets.xlsx")
+head(spectra_trait_data)
+```
+
+Separate macro and spectra traits. I shouldn't hard code these values in, but for ease of time I will since this is just for our eyes at this point.
+```{r Separate_data}
+pheno_traits <- spectra_trait_data[c(7:23, 165,166)]
+spectra_traits <- spectra_trait_data[c(24:164)]
+head(pheno_traits)
+```
+
+```{r Trait_ANOVA_analysis}
+aov_sum_sq_matrix <- matrix(nrow = 19, ncol = 4)
+rownames(aov_sum_sq_matrix) <- colnames(pheno_traits)
+colnames(aov_sum_sq_matrix) <- c('Trait_SS','Residual_SS','Total_SS','R^2')
+
+for(i in 1:19){
+  pheno_spectra_aov <- aov(as.matrix(pheno_traits[,i])~as.matrix(spectra_traits))
+  aov_sum_sq_matrix[i,1] <- summary(pheno_spectra_aov)[[1]][,'Sum Sq'][1]
+  aov_sum_sq_matrix[i,2] <- summary(pheno_spectra_aov)[[1]][,'Sum Sq'][2]
+}
+aov_sum_sq_matrix[,3] <- aov_sum_sq_matrix[,1] + aov_sum_sq_matrix[,2]
+aov_sum_sq_matrix[,4] <- aov_sum_sq_matrix[,1] / aov_sum_sq_matrix[,3]
+aov_sum_sq_matrix_round <- round(aov_sum_sq_matrix,2)
+sink("../Spectra/Results/Trait_Variance_Explained_by_Spectra.txt")
+print(aov_sum_sq_matrix_round)
+sink()
+closeAllConnections()
+```
+
+How much moisture uptake variation is explained by the traits alone?
+```{r Further_data_splitting}
+moisture_uptake <- pheno_traits[,18]
+dml_percent <- pheno_traits[,19]
+macro_traits <- pheno_traits[,-c(18:19)]
+```
+
+```{r Small_scale}
+moisture_uptake_traits_aov <- summary(aov(as.matrix(moisture_uptake)~as.matrix(macro_traits)))
+moisture_trait_ss <- moisture_uptake_traits_aov[[1]][,'Sum Sq'][1]
+moisture_resid_ss <- moisture_uptake_traits_aov[[1]][,'Sum Sq'][2]
+prop_var_expl <- moisture_trait_ss/(moisture_trait_ss+moisture_resid_ss)
+prop_var_expl
+```
+
+Does adding the traits and the spectra explain more variance?
+```{r  Moisture_var_explained_matrix}
+all_pred <- cbind(spectra_traits,macro_traits)
+mup_trait_spectra_aov <- summary(aov(as.matrix(moisture_uptake)~as.matrix(all_pred)))
+
+moisture_var_matrix <- matrix(nrow = 3, ncol = 4)
+colnames(moisture_var_matrix) <- c("Trait_SS","Residual_SS","Total_SS","R^2")
+rownames(moisture_var_matrix) <- c("Macro","Spectra","Spec+Mac")
+
+#Spectra + Macro Based Data
+moisture_var_matrix[3,1] <- mup_trait_spectra_aov[[1]][,'Sum Sq'][1]
+moisture_var_matrix[3,2] <- mup_trait_spectra_aov[[1]][,'Sum Sq'][2]
+moisture_var_matrix[3,3] <- moisture_var_matrix[3,1]+moisture_var_matrix[3,2]
+moisture_var_matrix[3,4] <- moisture_var_matrix[3,1]/moisture_var_matrix[3,3]
+
+moisture_var_matrix[1,1] <- moisture_trait_ss
+moisture_var_matrix[1,2] <- moisture_resid_ss
+moisture_var_matrix[1,3] <- moisture_var_matrix[1,1] + moisture_var_matrix[1,2]
+moisture_var_matrix[1,4] <- moisture_var_matrix[1,1] / moisture_var_matrix[1,3]
+
+moisture_var_matrix[2,] <- aov_sum_sq_matrix[18,]
+
+moisture_var_matrix_round <- round(moisture_var_matrix,2)
+
+sink("../Spectra/Results/Moisture_Var_Explained_Spec+Trait.txt")
+print(moisture_var_matrix_round)
+sink()
+closeAllConnections()
+```
+
+Dry Matter Loss by Macro Traits:
+```{r}
+dml_traits_aov <- summary(aov(as.matrix(dml_percent)~as.matrix(macro_traits)))
+dml_trait_ss <- dml_traits_aov[[1]][,'Sum Sq'][1]
+dml_resid_ss <- dml_traits_aov[[1]][,'Sum Sq'][2]
+dml_prop_var_expl <- dml_trait_ss/(dml_trait_ss+dml_resid_ss)
+dml_prop_var_expl
+```
+
