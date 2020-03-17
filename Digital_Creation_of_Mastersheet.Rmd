@@ -1,0 +1,141 @@
+---
+title: "Digitally Combining All Data"
+author: "Michael Burns"
+date: "3/11/2020"
+output: html_document
+---
+
+This markdown is to create a csv file that has all of the important data in one place.  I am going to try to figure out where all of the original data is and collect from there.  This will likely take a while to sort everything out.  The reason I am doing this is because while looking at some cooking parameters and spectral data, I noticed that 36 out of just over 300 dont have the correct moisture average on the spectral data sheet.  They aren't usually far off, but it is worrysome that they are off nonetheless and this could cause big problems down the road when trying to make predictions.
+
+```{r loading_original_data}
+dataset <- read_xlsx("../Data/Macro_Trait_Data/YC_data_w_moisture_uptake.xlsx", sheet = "Original_Data")
+dataset
+```
+
+Now trim down the data to the columns needed:
+```{r trimming_data}
+library(chron)
+dataset_trim <- dataset %>%
+  select(c("YC", "Geno", "HotPlate.ID", "Hotplate.Pos", "Cook_Time", "Steep_Time", 
+           "PH", "DML.Percent", "Y.Kernel.Moisture", "Z.Kernel.Moisture")) %>%
+  mutate(Y.Kernel.Moisture = as.numeric(Y.Kernel.Moisture),
+         Z.Kernel.Moisture = as.numeric(Z.Kernel.Moisture),
+         row = row_number()) %>%
+  group_by(row) %>%
+  mutate(Moisture_Uptake = mean(c(Y.Kernel.Moisture, Z.Kernel.Moisture), na.rm = T)) %>%
+  ungroup() %>%
+  rename(Sample_ID = YC,
+         Genotype = Geno,
+         Hotplate_ID = HotPlate.ID,
+         Hotplate_Pos = Hotplate.Pos,
+         pH = PH,
+         DML_Percent = DML.Percent) %>%
+  mutate(Cook_Time = minutes(Cook_Time),
+         Steep_Time = hours(Steep_Time) + (minutes(Steep_Time) / 60)) %>%
+    select(-c(Y.Kernel.Moisture, Z.Kernel.Moisture, row))
+dataset_trim
+```
+
+Now that the data is trimmed and date variables are in a usable format, lets reduce this dataset down to its single individuals. 
+```{r}
+dataset_avgd <- dataset_trim %>%
+  group_by(Sample_ID) %>%
+  mutate(Moisture_Uptake = as.numeric(Moisture_Uptake)) %>%
+  summarise(Genotype = unique(Genotype),
+            Cook_Time = mean(Cook_Time, na.rm = TRUE),
+            Steep_Time = mean(Steep_Time, na.rm = TRUE),
+            pH = mean(as.numeric(pH), na.rm = TRUE),
+            Moisture_Uptake = mean(Moisture_Uptake, na.rm = TRUE)) %>%
+  filter(!is.nan(Moisture_Uptake))
+dataset_avgd
+```
+
+Need to load datasheet with macro-trait data:
+```{r loading_macro_trait_data}
+macro_dataset <- read_xlsx("../Data/Macro_Trait_Data/YC_data_w_moisture_uptake.xlsx", sheet = "NIR_Algorithm_Cleaned")
+macro_dataset
+```
+
+```{r trim_macro_trait_dataset}
+macro_trim <- macro_dataset %>%
+  arrange(desc(Analysis.Time)) %>%
+  distinct(SampleID, .keep_all = TRUE) %>%
+  select(c(SampleID, Genotype, Block, Rep, Env, Amylopectin_average, Ankom_Crude_Fiber_average, Ash, Crude.fat, Crude.fiber, Fructose, Glucose,
+           N_combustion_average, N_Kjeltec_average, Sucrose_average, Total_Sugars_average, Moisture, Protein_As_is, Fat_As_is, Fiber_As_is,
+           Ash_As_is, Starch_As_is))
+```
+
+```{r lining_up_datasets}
+dataset_red <- dataset_avgd %>%
+  filter(Sample_ID %in% macro_dataset$SampleID)
+
+macro_red <- macro_trim %>% 
+  filter(SampleID %in% dataset_avgd$Sample_ID) %>%
+  arrange(SampleID)
+
+sum(dataset_red$Sample_ID == macro_red$SampleID) #Sanity check that they all match in order.
+
+macro_just_traits <- macro_red %>%
+  select(-c(SampleID, Genotype))
+```
+
+```{r binding_by_columns}
+dataset_halfmaster_unclean <- bind_cols(dataset_red, macro_just_traits)
+
+checker <- read_xlsx("../Data/Spectra_Data/spectra_learning_sets.xlsx")
+checker %>% #Sanity check to make sure I at least had the samples I did before when I did it all on excel.  GOOD TO GO!  Now I need to figure out what the extra three data points are.
+  filter(SampleID %in% dataset_master_unclean$Sample_ID)
+```
+
+So it appears I have two extra rows than I originally had.  Luckily this isnt many and was likely due to some error early on.  Tomorrow I will focus on adding the spectral data to this tibble, putting it in a better order, and then saving it as a csv. 
+```{r loading_spectral_data}
+spec_dataset <- read_csv("../Data/Spectra_Data/15000_corn_hirsch.csv")
+```
+
+```{r}
+spec_dataset_good <- spec_dataset %>%
+  mutate(SampleID = toupper(SampleID)) %>%
+  filter(str_detect(SampleID, "YC16")) %>%
+  mutate(SampleID = str_remove(SampleID, pattern = "^.[0-9]")) %>%
+  arrange(desc(SampleID)) %>%
+  mutate(SampleID = str_remove(SampleID, pattern = c("_RESCAN", "_Rescan", "_rescan", 
+                                                         "-RESCAN", "-Rescan", "-rescan", 
+                                                         "RESCAN", "Rescan", "rescan"))) %>%
+  distinct(SampleID, .keep_all = TRUE)
+```
+
+```{r}
+spec_red <- spec_dataset_good %>% 
+  filter(SampleID %in% dataset_halfmaster_unclean$Sample_ID) %>% 
+  arrange(SampleID) %>% 
+  select(-c(SampleID))
+
+dataset_master_unclean_unorder <- bind_cols(dataset_halfmaster_unclean, spec_red)
+```
+
+reordering for ease of use.
+```{r}
+dataset_master_unclean <- dataset_master_unclean_unorder %>% 
+  select(Sample_ID, Genotype, Block, Rep, Env, Cook_Time, Steep_Time, pH, 10:26, Moisture_Uptake, 27:167)
+```
+
+Cleaning for extreme values -- Not sure if this will be doable with tidyverse alone.
+To be honest, I am not sure it needs to be done,  we have all of the data points that the original file made in excel has, plus two more.  Lets plot out some of the data to see if there are any extreme values.
+```{r}
+dataset_master_unclean %>% 
+  select(c(1,9:26)) %>%
+  pivot_longer(cols = -c(Sample_ID), names_to = "Variable", values_to = "Value") %>%
+  ggplot(aes(x = Value))+
+  geom_histogram()+
+  facet_wrap(~Variable, scales = "free")
+```
+Everything looks relatively normalish, and none of the histograms are shrunken to allow an outlier to appear on the graph.  I would say the dataset is good to go.
+```{r}
+dataset_master <- dataset_master_unclean
+```
+
+Lets print off the dataset.
+```{r}
+write_csv(x = dataset_master, path = "../Data/Moisture_Uptake_Master_Dataset_Cook_Macro_Spectra.csv")
+```
+
