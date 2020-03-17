@@ -20,7 +20,7 @@ library(Hmisc)
 ```
 
 ```{r}
-nir_spectra<-read.csv("/Users/michael/Desktop/Grad_School/Research/Datasets/Machine Learning/Spectra_Data/NIR_spectra_w_moisture_uptake.csv", check.names = F)
+nir_spectra<-read.csv("../Data/Spectra_Data/NIR_spectra_w_moisture_uptake.csv", check.names = F)
 for(i in 3:ncol(nir_spectra)){
   if(!is.double(nir_spectra[,i])){
     nir_spectra[,i]<-as.numeric(as.character(nir_spectra[,i]))
@@ -108,7 +108,7 @@ According to the selectNcomp function within pls, we should be choosing between 
 
 Try Making Predictions
 ```{r}
-nir_test_spectra<-read.csv("/Users/michael/Desktop/Grad_School/Research/Datasets/Machine Learning/Spectra_Data/WiDiv_Dataset_Inliers.csv", check.names = F)
+nir_test_spectra<-read.csv("../Data/Spectra_Data/WiDiv_Dataset_Inliers.csv", check.names = F)
 nir_test_spectra_mat<-as.matrix(nir_test_spectra[,c(2:142)])
 ```
 
