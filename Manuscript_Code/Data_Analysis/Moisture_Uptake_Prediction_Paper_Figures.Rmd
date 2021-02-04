@@ -1,0 +1,1953 @@
+---
+title: "Moisture Uptake Prediction Paper Figures"
+author: "Michael Burns"
+date: "6/22/2020"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+This rmarkdown file is to create and modify the images that will be used in the moisture prediction publication.  I will try to keep each file separate, and label well which ones are which.  Candy mentioned making all plots in R, and then adding them to a powerpoint slide that is 7.5" x 10" to make sure they are sized properly.  This will be especially helpful with multicomponent figures, and to reduce white space present.
+
+```{r libraries}
+library(tidyverse)
+library(magrittr)
+library(doParallel)
+library(foreach)
+library(beepr)
+library(lme4)
+library(lattice)
+library(lmerTest)
+library(broom)
+library(caret)
+library(readxl)
+library(PupillometryR)
+```
+
+
+```{r loading_all_important_data}
+#######################
+# N500 Selected Lines #
+#######################
+n500_pca_data <- read_csv("../Data/NIR_Spectra_N500_Selected.csv")
+
+sp15_spectra_dataframe <- read_csv("../Data/SP14_SP15_Decoder.csv") %>%
+  full_join(n500_pca_data) %>%
+  filter(!is.na(X950)) %>%
+  select(-c(Selected, Date, Time)) %>%
+  rename(Sample_ID = ID) 
+
+colnames(sp15_spectra_dataframe) <- c("Sample_ID", "Genotype", seq(950,1650,5))
+
+#sp15_spectra_dataframe %>% write_csv("../Data/Manuscript_Data/SP15_Spectra.csv")
+
+#####################
+# Raw Training Data #
+#####################
+n400_dataset <- read_csv("../Data/Moisture_Uptake_Master_Dataset_Cook_Macro_Spectra.csv")
+
+###############################
+# Loading Macro Training Data #
+###############################
+macro_training_data <- read_csv("../Data/Moisture_Uptake_Master_Dataset_Cook_Macro_Spectra.csv") %>%
+  select(c(1,2,21:26))
+
+#macro_training_data %>% select(-8) %>% write_csv("../Data/Manuscript_Data/SP16_SP17_Macro.csv")
+
+##################################
+# Loading Spectral Training Data #
+##################################
+spectra_training_data <- read_csv("../Data/Moisture_Uptake_Master_Dataset_Cook_Macro_Spectra.csv") %>%
+  select(-c(3:25))
+
+#spectra_training_data %>% select(-3) %>% write_csv("../Data/Manuscript_Data/SP16_SP17_Spectra.csv")
+
+###################################
+# Cleaning Spectral Training Data #
+###################################
+Vis <- spectra_training_data
+#Create a matrix with lower and upper limits equal to the min and max wavelengths in your dataset
+#Select every 10th (you could also do every 5th, 3rd, etc.)wavelength to remove collinearity issues for outlier detection
+minwv <- 950 #What is the minimum wavelength you scanned
+maxwv <- 1650#What is the maxium wavelength you scanned
+Rand <- as.matrix(seq(minwv,maxwv,10))
+#Combine the sample name with the subset of columns selected
+MData<-cbind(Vis[,1],Vis[,colnames(Vis) %in% Rand])
+colnames(MData)[1]<-"Sample"
+#Calculate the mahalanobis distance on all samples using subset of wavelengths
+Spec_Start <- 4#The column where the spectra data starts in your dataset
+m_dist <- as.matrix(mahalanobis(MData[,Spec_Start:ncol(MData)], colMeans(MData[,Spec_Start:ncol(MData)]), cov(MData[,Spec_Start:ncol(MData)]),na.rm=TRUE))
+df <- as.data.frame(round(m_dist, 1))
+colnames(df)[1]<-"MH"
+#Combine the Mahalanobis distance with the original data
+Combined <- cbind(df,Vis)
+#Calculate  threshold for sample to be considered an outlier (here I use 3 times the mean)
+Threshold <- 3*mean(m_dist)
+#Only reatin samples that are less than outlier threshold
+Final <- Combined[Combined[,1]<Threshold,]
+#Delete column that has Mahalanobis distance
+clean_spectra_training_data <- Final[,2:ncol(Final)]
+
+###############################################
+# Cook Test Validation Data with Macro Traits #
+###############################################
+macro_trait_validation_data <- read_csv("../Data/ML_Master_Validation_Dataset.csv") %>%
+  select(c(1:8))
+
+##################################################
+# Cook Test Validation Data with Spectral Traits #
+##################################################
+spectra_validation_data <- read_csv("../Data/ML_Master_Validation_Dataset.csv") %>%
+  select(-c(4:8))
+
+#############################
+# Normalizing Spectral Data #
+#############################
+norm_training_data <- clean_spectra_training_data %>%
+  pivot_longer(cols = -c(Sample_ID, Genotype, Moisture_Uptake), names_to = "Waveband", values_to = "Absorbance") %>%
+  group_by(Sample_ID) %>%
+  mutate(sum_lxl_abs = sum(abs(Absorbance)),
+         Norm_Abs = Absorbance / sum_lxl_abs) %>%
+  select(-c(Absorbance, sum_lxl_abs)) %>%
+  ungroup() %>%
+  pivot_wider(id_cols = c(Sample_ID, Genotype, Moisture_Uptake), 
+              values_from = Norm_Abs, 
+              names_from = Waveband)
+
+norm_validation_data <- spectra_validation_data %>%
+  pivot_longer(cols = -c(SampleID, Genotype, Moisture_Uptake), names_to = "Waveband", values_to = "Absorbance") %>%
+  group_by(SampleID) %>%
+  mutate(sum_lxl_abs = sum(abs(Absorbance)),
+         Norm_Abs = Absorbance / sum_lxl_abs) %>%
+  select(-c(Absorbance, sum_lxl_abs)) %>%
+  ungroup() %>%
+  pivot_wider(id_cols = c(SampleID, Genotype, Moisture_Uptake), 
+              values_from = Norm_Abs, 
+              names_from = Waveband)
+
+######################
+# Loading N5000 Data #
+######################
+n5000_data <- read_csv("../Data/N5000_Spectra_Cleaned_Master.csv")
+
+#####################################
+# Cleaning Spectral Validation Data #
+#####################################
+Vis <- n5000_data
+#Create a matrix with lower and upper limits equal to the min and max wavelengths in your dataset
+#Select every 10th (you could also do every 5th, 3rd, etc.)wavelength to remove collinearity issues for outlier detection
+minwv <- 950 #What is the minimum wavelength you scanned
+maxwv <- 1650#What is the maxium wavelength you scanned
+Rand <- as.matrix(seq(minwv,maxwv,10))
+#Combine the sample name with the subset of columns selected
+MData<-cbind(Vis[,1],Vis[,colnames(Vis) %in% Rand])
+colnames(MData)[1]<-"Sample"
+#Calculate the mahalanobis distance on all samples using subset of wavelengths
+Spec_Start <- 4#The column where the spectra data starts in your dataset
+m_dist <- as.matrix(mahalanobis(MData[,Spec_Start:ncol(MData)], colMeans(MData[,Spec_Start:ncol(MData)]), cov(MData[,Spec_Start:ncol(MData)]),na.rm=TRUE))
+df <- as.data.frame(round(m_dist, 1))
+colnames(df)[1]<-"MH"
+#Combine the Mahalanobis distance with the original data
+Combined <- cbind(df,Vis)
+#use threshold based on the training data
+#Only reatin samples that are less than outlier threshold
+Final <- Combined[Combined[,1]<Threshold,]
+#Delete column that has Mahalanobis distance
+n5000_data <- Final[,2:ncol(Final)]
+
+### Cleaning Validation Dataset ###
+norm_validation_data <- norm_validation_data %>%
+  filter(SampleID %in% n5000_data$SampleID) # This only removes one data point (the extremely low end one).
+
+#######################################
+# Formatting Full Predication Dataset #
+#######################################
+#read_csv("../Data/N5000_Master_With_Predictions.csv") %>%
+#  filter(SampleID %in% n5000_data$SampleID) %>%
+#  write_csv("../Data/Manuscript_Data/N5000_Prediction_Dataset.csv")
+
+###############################################
+# R Bootstrapped Models trained on Macro Data #
+###############################################
+### Bounded ###
+msi_macro_random_random_bound_raw <- read_csv('../Data/MSI_Data/macro_randomsplit_randomcv_raw.csv') %>%
+  mutate(Split = "Random",
+         CV = "Random",
+         Bounds = "Yes")
+msi_macro_geno_geno_bound_raw <- read_csv('../Data/MSI_Data/macro_genosplit_genocv_raw.csv') %>%
+  mutate(Split = "Genotype",
+         CV = "Genotype",
+         Bounds = "Yes")
+msi_macro_geno_random_bound_raw <- read_csv('../Data/MSI_Data/macro_genosplit_randomcv_raw.csv') %>%
+  mutate(Split = "Genotype",
+         CV = "Random",
+         Bounds = "Yes")
+
+### Unbounded ###
+msi_macro_random_random_nobound_raw <- read_csv('../Data/MSI_Data/macro_randomsplit_randomcv_nobound_raw.csv') %>%
+  mutate(Split = "Random",
+         CV = "Random",
+         Bounds = "No")
+msi_macro_geno_geno_nobound_raw <- read_csv('../Data/MSI_Data/macro_genosplit_genocv_nobound_raw.csv') %>%
+  mutate(Split = "Genotype",
+         CV = "Genotype",
+         Bounds = "No")
+msi_macro_geno_random_nobound_raw <- read_csv('../Data/MSI_Data/macro_genosplit_randomcv_nobound_raw.csv') %>%
+  mutate(Split = "Genotype",
+         CV = "Random",
+         Bounds = "No")
+
+full_r_macro_raw <- bind_rows(msi_macro_random_random_bound_raw, 
+                              msi_macro_geno_geno_bound_raw, 
+                              msi_macro_geno_random_bound_raw, 
+                              msi_macro_random_random_nobound_raw, 
+                              msi_macro_geno_geno_nobound_raw, 
+                              msi_macro_geno_random_nobound_raw) %>%
+  pivot_longer(cols = -c(repetition, 
+                         Split,
+                         CV, 
+                         Bounds,
+                         contains("degree"), 
+                         contains("scale"), 
+                         contains("sigma"),
+                         contains("_int"),
+                         contains("_cost"),
+                         contains("mtry"),
+                         contains("_cp"),
+                         contains("_k")),
+               names_to = "Model_Type_Param", 
+               values_to = "Performance") %>%
+  mutate(Model_Type_Param = str_remove(string = Model_Type_Param, pattern = "_random")) %>%
+  mutate(Model = case_when(str_detect(string = Model_Type_Param, pattern = "lm") ~ "LM", # this section creates new columns for the different models
+                           str_detect(string = Model_Type_Param, pattern = "cart") ~ "RPART",
+                           str_detect(string = Model_Type_Param, pattern = "rf") ~ "RF",
+                           str_detect(string = Model_Type_Param, pattern = "svml") ~ "SVML",
+                           str_detect(string = Model_Type_Param, pattern = "svmp") ~ "SVMP",
+                           str_detect(string = Model_Type_Param, pattern = "svmr") ~ "SVMR",
+                           str_detect(string = Model_Type_Param, pattern = "knn") ~ "KNN"),
+         Metric = case_when(str_detect(string = Model_Type_Param, pattern = "rmse") ~ "RMSE", # this section creates new columns for the different metrics
+                            str_detect(string = Model_Type_Param, pattern = "cor") ~ "Spearman_R"),
+         Data = case_when(str_detect(string = Model_Type_Param, pattern = "macro") ~ "Macro")) %>%
+  select(-Model_Type_Param) %>% # getting rid of the messy colum with mulitple pieces of information since they each have their own column  now
+  mutate(Intercept = case_when(Model == "LM" ~ as.double(lm_macro_random_int)),
+         Mtry = case_when(Model == "RF" ~ as.double(rf_macro_random_mtry)),
+         C = case_when(Model == "SVML" ~ as.double(svml_macro_random_cost),
+                       Model == "SVMP" ~ as.double(svmp_macro_random_cost),
+                       Model == "SVMR" ~ as.double(svmr_macro_random_cost),),
+         Degree = case_when(Model == "SVMP" ~ as.double(svmp_macro_random_degree),),
+         Scale = case_when(Model == "SVMP" ~ as.double(svmp_macro_random_scale),),
+         Sigma = case_when(Model == "SVMR" ~ as.double(svmr_macro_random_sigma)),
+         K = case_when(Model == "KNN" ~ as.double(knn_macro_random_k)),
+         CP = case_when(Model == "RPART" ~ as.double(cart_macro_random_cp))) %>%
+  select(repetition, Split, CV, Bounds, Model, Metric, Data, Intercept, Mtry, K, CP, C, Degree, Scale, Sigma, Performance) %>%
+  group_by(Model, Metric, Split, CV, Bounds, Data, Intercept, Mtry, K, CP, C) %>%
+  mutate(Mean_Performance = mean(Performance),
+         n = n(),
+         Median_Degree = median(Degree),
+         Median_Scale = median(Scale),
+         Median_Sigma = median(Sigma)) %>%
+  arrange(desc(Mean_Performance)) %>%
+  group_by(Model, Metric, Split, CV, Bounds) %>%
+  filter(Metric == "Spearman_R")
+
+full_r_macro_raw %>%
+  filter(Bounds == "No") %>%
+  select(-Bounds) %>%
+  group_by(Model, Metric, Split, CV, Data, Intercept, Mtry, K, CP, C, Median_Degree, Median_Scale, Median_Sigma) %>%
+  summarise(Mean_Spearman_R = mean(Performance),
+            Min_Spearman_R = min(Performance),
+            Max_Spearman_R = max(Performance)) %>%
+  arrange(desc(Mean_Spearman_R)) %>%
+  filter(Split == CV) #%>%
+  #write_csv("../Data/Manuscript_Data/Macro_Models_Summary.csv")
+
+top_macro_models <- full_r_macro_raw %>%
+  group_by(Split, CV, Bounds, Model, Metric, Data, Intercept, Mtry, K, CP, C) %>%
+  mutate(Mean_Performance = mean(Performance),
+            St_Dev_Performance = sd(Performance),
+            n = n()) %>%
+  filter(Bounds == "No") %>%
+  group_by(Model, Split, CV) %>%
+  arrange(desc(Mean_Performance)) %>%
+  mutate(number = row_number()) %>%
+  filter(number <= 100) %>%
+  mutate(Part_CV = paste(Split, CV, sep = "_"))
+
+top_macro_performances <- top_macro_models %>% 
+  group_by(Split, CV) %>%
+  group_by(Split, CV, Model, Metric, Data, Intercept, Mtry, K, CP, C) %>%
+  summarise(Degree = mean(Degree),
+            Scale = mean(Scale),
+            Sigma = mean(Sigma),
+            Performance = mean(Performance)) %>%
+  arrange(desc(Performance)) %>%
+  filter(Split == "Genotype" & CV == "Genotype")
+
+top_macro_performances
+
+##################################################
+# R Bootstrapped Models trained on Spectral Data #
+##################################################
+### Non-Bound Genotype-Genotype Models ###
+msi_spectra_gg_nb_raw_1 <- read_csv("../Data/MSI_Data/spectra_genosplit_genocv_nobound_raw_1.csv") %>%
+  mutate(Partition = "Genotype",
+         CV = "Genotype",
+         Bounds = "No")
+msi_spectra_gg_nb_raw_2 <- read_csv("../Data/MSI_Data/spectra_genosplit_genocv_nobound_raw_2.csv") %>%
+  mutate(Partition = "Genotype",
+         CV = "Genotype",
+         Bounds = "No")
+msi_spectra_gg_nb_raw_3 <- read_csv("../Data/MSI_Data/spectra_genosplit_genocv_nobound_raw_3.csv") %>%
+  mutate(Partition = "Genotype",
+         CV = "Genotype",
+         Bounds = "No")
+msi_spectra_gg_nb_raw_4 <- read_csv("../Data/MSI_Data/spectra_genosplit_genocv_nobound_raw_4.csv") %>%
+  mutate(Partition = "Genotype",
+         CV = "Genotype",
+         Bounds = "No")
+msi_spectra_gg_nb_raw_5 <- read_csv("../Data/MSI_Data/spectra_genosplit_genocv_nobound_raw_5.csv") %>%
+  mutate(Partition = "Genotype",
+         CV = "Genotype",
+         Bounds = "No")
+
+gg_models_all <- msi_spectra_gg_nb_raw_1 %>%
+  bind_rows(msi_spectra_gg_nb_raw_2) %>%
+  bind_rows(msi_spectra_gg_nb_raw_3) %>%
+  bind_rows(msi_spectra_gg_nb_raw_4) %>%
+  bind_rows(msi_spectra_gg_nb_raw_5)
+
+### Non-Bound Random-Random Models ###
+msi_spectra_rr_raw_1 <- read_csv("../Data/MSI_Data/spectra_randomsplit_randomcv_nobound_raw_1.csv") %>%
+  mutate(Partition = "Random",
+         CV = "Random",
+         Bounds = "No")
+msi_spectra_rr_raw_2 <- read_csv("../Data/MSI_Data/spectra_randomsplit_randomcv_nobound_raw_2.csv") %>%
+  mutate(Partition = "Random",
+         CV = "Random",
+         Bounds = "No")
+msi_spectra_rr_raw_3 <- read_csv("../Data/MSI_Data/spectra_randomsplit_randomcv_nobound_raw_3.csv") %>%
+  mutate(Partition = "Random",
+         CV = "Random",
+         Bounds = "No")
+msi_spectra_rr_raw_4 <- read_csv("../Data/MSI_Data/spectra_randomsplit_randomcv_nobound_raw_4.csv") %>%
+  mutate(Partition = "Random",
+         CV = "Random",
+         Bounds = "No")
+msi_spectra_rr_raw_5 <- read_csv("../Data/MSI_Data/spectra_randomsplit_randomcv_nobound_raw_5.csv") %>%
+  mutate(Partition = "Random",
+         CV = "Random",
+         Bounds = "No")
+
+rr_models_all <- msi_spectra_rr_raw_1 %>%
+  bind_rows(msi_spectra_rr_raw_2) %>%
+  bind_rows(msi_spectra_rr_raw_3) %>%
+  bind_rows(msi_spectra_rr_raw_4) %>%
+  bind_rows(msi_spectra_rr_raw_5)
+
+### Non-Bound Genotype-Random Models ###
+msi_spectra_gr_raw_2 <- read_csv("../Data/MSI_Data/spectra_genosplit_randomcv_nobound_raw_2.csv") %>%
+  mutate(Partition = "Genotype",
+         CV = "Random",
+         Bounds = "No")
+msi_spectra_gr_raw_3 <- read_csv("../Data/MSI_Data/spectra_genosplit_randomcv_nobound_raw_3.csv") %>%
+  mutate(Partition = "Genotype",
+         CV = "Random",
+         Bounds = "No")
+msi_spectra_gr_raw_4 <- read_csv("../Data/MSI_Data/spectra_genosplit_randomcv_nobound_raw_4.csv") %>%
+  mutate(Partition = "Genotype",
+         CV = "Random",
+         Bounds = "No")
+msi_spectra_gr_raw_5 <- read_csv("../Data/MSI_Data/spectra_genosplit_randomcv_nobound_raw_5.csv") %>%
+  mutate(Partition = "Genotype",
+         CV = "Random",
+         Bounds = "No")
+
+gr_models_all <- msi_spectra_gr_raw_2 %>%
+  bind_rows(msi_spectra_gr_raw_3) %>%
+  bind_rows(msi_spectra_gr_raw_4) %>%
+  bind_rows(msi_spectra_gr_raw_5)
+
+msi_spectra_raw_full <- gg_models_all %>%
+  bind_rows(rr_models_all) %>%
+  bind_rows(gr_models_all) %>%
+  pivot_longer(cols = c(contains("_cor"), contains("_rmse")),
+  names_to = "Mod_Data_Met", 
+  values_to = "Performance") %>%
+  mutate(Model = case_when(str_detect(string = Mod_Data_Met, pattern = "lm") ~ "LM", # this section creates new columns for the different models
+                           str_detect(string = Mod_Data_Met, pattern = "pcr") ~ "PCR",
+                           str_detect(string = Mod_Data_Met, pattern = "rf") ~ "RF",
+                           str_detect(string = Mod_Data_Met, pattern = "svml") ~ "SVML",
+                           str_detect(string = Mod_Data_Met, pattern = "svmp") ~ "SVMP",
+                           str_detect(string = Mod_Data_Met, pattern = "svmr") ~ "SVMR",
+                           str_detect(string = Mod_Data_Met, pattern = "pls") ~ "PLS"),
+         Metric = case_when(str_detect(string = Mod_Data_Met, pattern = "rmse") ~ "RMSE", # this section creates new columns for the different metrics
+                            str_detect(string = Mod_Data_Met, pattern = "cor") ~ "Spearman_R"),
+         Data = case_when(str_detect(string = Mod_Data_Met, pattern = "spectra") ~ "Spectra")) %>%
+  select(-Mod_Data_Met) %>% # getting rid of the messy colum with mulitple pieces of information since they each have their own column  now
+  mutate(Intercept = case_when(Model == "LM" ~ as.double(lm_spectra_int)),
+         Mtry = case_when(Model == "RF" ~ as.double(rf_spectra_mtry)),
+         C = case_when(Model == "SVML" ~ as.double(svml_spectra_cost),
+                       Model == "SVMP" ~ as.double(svmp_spectra_cost),
+                       Model == "SVMR" ~ as.double(svmr_spectra_cost),),
+         Degree = case_when(Model == "SVMP" ~ as.double(svmp_spectra_degree),),
+         Scale = case_when(Model == "SVMP" ~ as.double(svmp_spectra_scale),),
+         Sigma = case_when(Model == "SVMR" ~ as.double(svmr_spectra_sigma)),
+         Ncomp = case_when(Model == "PLS" ~ as.double(pls_spectra_ncomp),
+                           Model == "PCR" ~ as.double(pcr_spectra_ncomp)),
+         dataset = str_remove(string = dataset, pattern = "_training")) %>%
+  select(seed, dataset, Partition, CV, Bounds, Model, Metric, Data, 
+         Intercept, Mtry, Ncomp, C, Degree, Scale, Sigma, Performance) %>%
+  group_by(Model, Metric, Partition, CV, Bounds, dataset, Data, Intercept, Mtry, Ncomp, C) %>%
+  mutate(Mean_Performance = mean(Performance),
+         n = n(),
+         Median_Degree = median(Degree),
+         Median_Scale = median(Scale),
+         Median_Sigma = median(Sigma)) %>%
+  filter(Metric == "Spearman_R") %>%
+  arrange(desc(Mean_Performance))
+
+msi_spectra_raw_full %>%
+  filter(Bounds == "No") %>%
+  select(-Bounds) %>%
+  group_by(Model, dataset, Metric, Partition, CV, Data, Intercept, Mtry, Ncomp, C, Median_Degree, Median_Scale, Median_Sigma) %>%
+  summarise(Mean_Spearman_R = mean(Performance),
+            Min_Spearman_R = min(Performance),
+            Max_Spearman_R = max(Performance)) %>%
+  arrange(desc(Mean_Spearman_R)) %>%
+  mutate(dataset = case_when(dataset == "base" ~ "Base Spectra",
+                             dataset == "abs" ~ "Absolute Value",
+                             dataset == "sq" ~ "Sum of Squares",
+                             dataset == "max" ~ "Maximum Value",
+                             dataset == "std" ~ "Standardized")) %>%
+  filter(Partition == CV) #%>%
+  #write_csv("../Data/Manuscript_Data/Spectra_Models_Summary.csv")
+
+msi_spectra_raw_full %>%
+  filter(Data == "Spectra") %>%
+  filter(Partition != "Environment") %>%
+  group_by(Partition, Model, dataset, CV, Bounds, Intercept, Mtry, Ncomp, C) %>%
+  mutate(Mean_Performance = mean(Performance),
+            St_Dev_Performance = sd(Performance),
+            n = n()) %>%
+  group_by(Partition, dataset, CV, Bounds, Intercept, Mtry, Ncomp, C) %>%
+  filter(Mean_Performance == max(Mean_Performance)) %>%
+  summarise(Model = unique(Model),
+            Mean_Performance = mean(Performance),
+            StDev = sd(Performance),
+            n = n()) %>%
+  arrange(desc(Mean_Performance)) %>%
+  ungroup() %>%
+  filter(Bounds == "No") %>%
+  select(Partition, CV, dataset, Model, Ncomp, C, Mean_Performance, StDev) %>%
+  rename(Norm = dataset)
+
+top_spectra_models <- msi_spectra_raw_full %>%
+  group_by(Partition, dataset, CV, Bounds, Model, Metric, Data, Intercept, Mtry, Ncomp, C) %>%
+  mutate(Mean_Performance = mean(Performance),
+            St_Dev_Performance = sd(Performance),
+            n = n()) %>%
+  filter(Bounds == "No" & Partition == "Genotype" & CV == "Genotype") %>%
+  group_by(Model, Partition, CV) %>%
+  arrange(desc(Mean_Performance)) %>% 
+  mutate(number = row_number()) %>%
+  filter(number <= 100)
+
+top_spectra_models %>% 
+  group_by(Model, Partition, dataset, CV, Bounds, Metric, Data, Intercept, Mtry, Ncomp, C) %>%
+  summarise(Performance = mean(Mean_Performance),
+            n = n()) %>%
+  arrange(desc(Performance)) %>%
+  bind_rows(top_macro_performances) %>%
+  filter(Partition==CV) #%>%
+  #write_csv("../Data/Manuscript_Data/Top_Models.csv")
+```
+
+```{r pca of original 500}
+pca <- prcomp(n500_pca_data %>%
+  select(-c(ID, Selected, Date, Time)))
+pca$x
+pca_matrix <- pca$x
+selected_pca <- pca_matrix %>%
+  as_tibble() %>%
+  mutate(Selected = n500_pca_data$Selected,
+         Selected = fct_relevel(Selected, c("Y", "N"))) %>%
+  arrange(desc(Selected)) %>%
+  ggplot(aes(x = PC1, y = PC2, color = Selected))+
+  geom_point(show.legend = F)+
+  theme_classic()+
+  theme(text = element_text(size = 12))+
+  scale_color_manual(values = c("black","gray"))+ #Change these colors later!!!
+  labs(tag = "A")
+
+selected_pca
+
+ggsave(selected_pca, file = "../Manuscript_Images/Selection_PCA.png", device = "png", width = 3, height = 3, units = "in", dpi = 600)
+```
+
+```{r trait variation in selected lines}
+n400_dataset %>%
+  select(c(2,21:26)) %>%
+  mutate(Moisture_Uptake = Moisture_Uptake*100) %>%
+  rename(Protein = Protein_As_is,
+         Starch = Starch_As_is,
+         Fiber = Fiber_As_is,
+         Fat = Fat_As_is,
+         Ash = Ash_As_is,
+         `Moisture Uptake` = Moisture_Uptake) %>%
+  pivot_longer(cols = -c(Genotype), names_to = "Molecule", values_to = "Estimate") %>%
+  group_by(Molecule) %>%
+  summarise(Min = min(Estimate),
+            Max = max(Estimate))
+
+trait_dist <- n400_dataset %>%
+  select(c(2,21:26)) %>%
+  mutate(Moisture_Uptake = Moisture_Uptake*100) %>%
+  rename(Protein = Protein_As_is,
+         Starch = Starch_As_is,
+         Fiber = Fiber_As_is,
+         Fat = Fat_As_is,
+         Ash = Ash_As_is,
+         `Moisture Uptake` = Moisture_Uptake) %>%
+  pivot_longer(cols = -c(Genotype), names_to = "Molecule", values_to = "Estimate") %>%
+  mutate(Molecule = fct_relevel(Molecule, c("Protein", "Starch", "Fiber", "Fat", "Ash", "Moisture Uptake"))) %>%
+  ggplot()+
+  aes(x = Estimate, fill = Molecule)+
+  geom_density(show.legend = F)+
+  scale_fill_manual(values = c("#fc8d62", "#fc8d62","#fc8d62","#fc8d62","#fc8d62", "darkgray"))+
+  facet_wrap(~Molecule, scales = "free")+
+  theme_classic()+
+  theme(text = element_text(size = 12), axis.text.x = element_text(angle = 45, hjust = 1),
+        strip.background = element_blank())+
+  labs(x = "Trait Value",
+       y = "Density",
+       tag = "B")
+
+trait_dist
+
+ggsave(trait_dist, file = "../Manuscript_Images/Trait_Distributions.png", device = "png", width = 4.5, height = 3, units = "in", dpi = 600)
+```
+
+```{r macro trait anova training set}
+trait_lmer <- n400_dataset %$%
+  lmer(Protein_As_is ~ (1 | Genotype) + (1 | Env/Rep) + (1 | Rep/Block) + (1 | Genotype:Env), REML = T) # (1|Env) is left out of the equation since the nesting with rep variable accounts for env.  If you add env itself to the equation, ranova wont work since there are technically two environments. After comparing with and without env models, the addition of env only accounts for 0.000012 units of stdev.
+
+registerDoParallel(cores = 4)
+trait_var_source <- foreach(i = 21:26, .combine = rbind) %dopar% {
+  trait_lmer <- lmer(n400_dataset[[i]] ~ (1 | Genotype) + (1 | Env/Rep) + (1 | Rep/Block) + (1 | Genotype:Env), data = n400_dataset, REML = T)
+  
+  var_source <- tidy(ranova(trait_lmer)) %>%
+    select(term, p.value) %>%
+    filter(term != "<none>") %>%
+    mutate(term = str_remove_all(string = term, pattern = "[(,1, ,|,)]")) %>%
+    rename(Parameter = term)
+  
+  var_exp <- summary(trait_lmer)[[13]] %>%
+    as_data_frame() %>%
+    select(grp, sdcor) %>%
+    rename(Parameter = grp, 
+          StDev = sdcor) %>%
+    mutate(var = StDev^2,
+           total_var = sum(var),
+           Percent_Var = (var/total_var) * 100) %>%
+    select(Parameter, var, Percent_Var) %>%
+    full_join(var_source) %>%
+    mutate(Trait = colnames(n400_dataset[i]))
+  
+  return(list(
+    Parameter = var_exp$Parameter,
+    Variance = var_exp$var,
+    Percent_Variance = var_exp$Percent_Var,
+    Trait = var_exp$Trait
+  ))
+}
+stopImplicitCluster()
+
+n400_var_source_plot <- trait_var_source %>%
+  as_tibble() %>%
+  unnest(cols = Parameter, Variance, Percent_Variance, Trait) %>%
+  mutate(Parameter = fct_relevel(Parameter, c("Genotype", "Env", "Genotype:Env", 
+                                              "Rep:Env", "Rep", "Block:Rep", 
+                                              "Residual")),
+         Trait = fct_relevel(Trait, c('Moisture_Uptake', 'Ash_As_is', 
+                                      'Fat_As_is', 'Fiber_As_is', "Starch_As_is", 
+                                      'Protein_As_is'))) %>%
+  ggplot(aes(x = Trait, y = Percent_Variance, fill = Trait))+
+  geom_bar(stat = "identity", show.legend = F)+
+  scale_fill_manual(values = c("darkgray", "#fc8d62", "#fc8d62","#fc8d62","#fc8d62","#fc8d62"))+
+  coord_flip()+
+  scale_y_continuous(limits = c(0,100), breaks = c(25,75))+
+  labs(x = NULL,
+       y = "Percent Variance Explained",
+       tag = "C")+
+  facet_grid(~Parameter, labeller = labeller(Parameter = c(Genotype = "G", 
+                                                           Env = "E", 
+                                                           `Genotype:Env` = "GxE", 
+                                                           `Rep:Env` = "R/E", 
+                                                           Rep = "R", 
+                                                           `Block:Rep` = "B/R",
+                                                           Residual = "e")))+
+  theme_classic()+
+  scale_x_discrete(labels = c("Moisture Uptake", 'Ash', 'Fat', 'Fiber',
+                              'Starch', 'Protein'))+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), text = element_text(size = 12),
+        strip.background = element_blank())
+
+n400_var_source_plot
+
+ggsave(n400_var_source_plot, file = "../Manuscript_Images/Macro_Trait_Var_Exp.png", device = "png", width = 4, height = 3, units = "in", dpi = 600)
+```
+Make an ANOVA table and add significant groups
+
+```{r correlations to moisture uptake}
+n400_data_for_cor <- n400_dataset %>%
+  select(-c(Sample_ID, Genotype, Block, Rep, Env, Amylopectin_average, Ankom_Crude_Fiber_average, Ash, Crude.fat, Crude.fiber,
+            Fructose, Glucose, N_combustion_average, N_Kjeltec_average, Sucrose_average, Total_Sugars_average, Moisture))
+
+corr_sig <- data.frame(Trait = NULL,
+                       P_Value = NULL)
+for(i in 1:ncol(n400_data_for_cor)){
+  corr_sig[i,1] <- colnames(n400_data_for_cor[i])
+  corr_sig[i,2] <- tidy(cor.test(x = n400_data_for_cor[[i]], y = n400_data_for_cor$Moisture_Uptake))$p.value
+}
+
+mup_cor_plot <- cor(n400_data_for_cor) %>%
+  as_tibble() %>%
+  mutate(Row_Variable = colnames(n400_data_for_cor)) %>%
+  pivot_longer(cols = -Row_Variable, names_to = "Column_Variable", values_to = "Correlation") %>%
+  filter(Column_Variable == "Moisture_Uptake") %>%
+  mutate(Correlation = abs(Correlation)) %>%
+  filter(Row_Variable != "Moisture_Uptake") %>%
+  mutate(Data_Type = case_when(Row_Variable == "Protein_As_is" | Row_Variable == "Starch_As_is" | 
+                                 Row_Variable == "Fiber_As_is" | Row_Variable == "Fat_As_is" | 
+                                 Row_Variable == "Ash_As_is" ~ "Macromolecule (3.7%)",
+                               Row_Variable == "Cook_Time" | Row_Variable == "Steep_Time" | Row_Variable == "pH" ~ "Cooking (0.18%)",
+                               str_detect(string = Row_Variable, pattern = "[0-9]") ~ "Spectra (62%)"),
+         Row_Variable = fct_relevel(Row_Variable, c('pH', 'Cook_Time', 'Steep_Time', 'Ash_As_is', 'Fiber_As_is', 
+                                                    'Protein_As_is', 'Starch_As_is', 'Fat_As_is', 
+                                                    as.character(seq(950,1650,5)))),
+         Data_Type = fct_relevel(Data_Type, c("Spectra (62%)", "Macromolecule (3.7%)", "Cooking (0.18%)"))) %>%
+  ggplot()+
+  aes(x = Row_Variable, y = Correlation)+
+  aes(color = Data_Type)+
+  geom_point()+
+  scale_color_manual(values = c("#7570b3", "#fc8d62", "#66c2a5"))+
+  theme_classic()+
+  theme(axis.ticks.x = element_blank(),
+        axis.text.x = element_blank(),
+        legend.position = c(0.7,0.3),
+        text = element_text(size = 12))+
+  guides(color = guide_legend(nrow = 3))+
+  labs(x = "Trait",
+       y = "Pearson Correlation Coefficient (r)",
+       tag = "D",
+       color = "Trait Type")
+
+mup_cor_plot
+
+ggsave(mup_cor_plot, file = "../Manuscript_Images/Correlation_to_Mup.png", device = "png", width = 3.5, height = 3, units = "in", dpi = 600)
+```
+figure out color and get rid of background lines.  Put brackets along bottom to say what each section is and the R2 value. Specify spearman or pearson.  Add "(Avg. Cor)" to legend.  Move legend into plot.
+
+```{r combining plots for figure 1}
+library(gridExtra)
+grid.arrange(selected_pca, trait_dist, n400_var_source_plot, mup_cor_plot)
+```
+
+```{r top performances of macro models}
+summary_top_macro_models <- Rmisc::summarySE(top_macro_models %>%
+                                                select(Model, Performance, Part_CV) %>%
+                                                ungroup() %>%
+                                               filter(Part_CV == "Genotype_Genotype"), 
+  measurevar = "Performance", 
+  groupvars = "Model")
+
+model_labs <- c("lm", "svmRadial", "svmLinear", "svmPoly", "rf", "cart", "knn")
+names(model_labs) <- c("LM", "SVMR", "SVML", "SVMP", "RF", "CART", "KNN")
+
+macro_model_perf <- top_macro_models %>%
+  select(Model, Performance, Part_CV) %>%
+  filter(Part_CV == "Genotype_Genotype") %>%
+  ungroup() %>% 
+  mutate(Model = fct_relevel(Model, c("LM", "SVMR", "SVML", "SVMP", "RF", "RPART", "KNN"))) %>%
+  ggplot(aes(x = Model, y = Performance))+
+  geom_flat_violin(color = "gray", fill = "gray", alpha = 0.7, position = position_nudge(x = 0.2, y = 0), show.legend = F)+
+  geom_jitter(color = "gray", width = 0.15, alpha = 0.5, show.legend = F)+
+  scale_x_discrete(labels = c("lm", "svmRadial", "svmLinear", "svmPoly", "rf", "rpart", "knn"))+
+  geom_point(data = summary_top_macro_models, aes(x = Model, y = Performance), position = position_nudge(0.2), inherit.aes = F)+
+  geom_errorbar(data = summary_top_macro_models, aes(x = Model, y = Performance, ymin = Performance - ci, ymax = Performance + ci), position = position_nudge(c(0.2)), width = 0.3, inherit.aes = F)+
+  scale_y_continuous(limits = c(0,1), breaks = c(0, 0.5, 1))+
+  coord_flip()+
+  theme_classic()+
+  labs(y = NULL,
+       x = NULL,
+       tag = "A")+
+  theme(text = element_text(size = 12))
+
+macro_model_perf
+
+ggsave(macro_model_perf, file = "../Manuscript_Images/Macro_Performance_Plots.png", device = "png", width = 3.75, height = 3, units = "in", dpi = 600)
+```
+
+```{r subplot to show spearman r correlation}
+#########################
+# Splitting by Genotype #
+#########################
+macro_training_genotypes <- macro_training_data %>% 
+  select(Genotype) %>% 
+  unique() %>%
+  sample_frac(size = 0.8) %>%
+  pull()
+
+macro_training_set <- macro_training_data %>%
+  filter(Genotype %in% macro_training_genotypes)
+
+macro_validation_set <- macro_training_data %>%
+  filter(!Genotype %in% macro_training_genotypes)
+
+knn_macro <- train(Moisture_Uptake ~ ., 
+                            data = macro_training_set %>%
+                              select_if(is.numeric), 
+                            method = "knn", 
+                            metric = "Rsquared", 
+                            tuneGrid = expand.grid(k = 5),
+                            trControl = trainControl(method = "cv",
+                                                     index = groupKFold(macro_training_set$Genotype, k = 10), 
+                                                     savePredictions = T, 
+                                                     #predictionBounds = c(T,T),
+                                                     allowParallel = T
+                                                     )
+                             )
+
+val_predictions <- predict(knn_macro, macro_validation_set)
+cor(val_predictions, macro_validation_set$Moisture_Uptake, method = "spearman")
+
+new_dataset <- tibble(Mup = macro_validation_set$Moisture_Uptake,
+                      pred = val_predictions)
+
+knn_cor <- ggplot(data = new_dataset, aes(x = Mup, y = pred))+
+  geom_point(show.legend = F)+
+  geom_smooth(method = "lm", se = F, show.legend = F, color = "black")+
+  geom_abline(linetype = "dashed", color = "gray")+
+  theme_classic()+
+  labs(x = "Actual Moisture Uptake",
+       y = "Predicted Moisture Uptake")+
+  theme(text = element_text(size = 12))+
+  ylim(c(0.38, 0.52))+
+  xlim(c(0.38, 0.52))
+
+knn_cor
+
+ggsave(knn_cor, file = "../Manuscript_Images/knn_correlation_plot.png", device = "png", width = 7.5, height = 7.5, units = "in", dpi = 600)
+```
+
+
+```{r top performances of spectral models}
+summary_top_spectra_models <- Rmisc::summarySE(top_spectra_models, measurevar = "Performance", groupvars = "Model")
+
+spectra_model_perf <- top_spectra_models %>%
+  select(Model, dataset, Performance) %>%
+  ungroup() %>% 
+  mutate(Model = fct_relevel(Model, c("SVML", "PLS", "PCR", "SVMP", "SVMR", "RF", "LM"))) %>%
+  ggplot()+
+  aes(x = Model)+
+  aes(y = Performance)+
+  aes(fill = Model)+
+  aes(color = Model)+
+  scale_fill_manual(values = c("gray20", "gray", "gray", "gray", "gray", "gray", "gray"))+
+  scale_color_manual(values = c("gray20", "gray", "gray", "gray", "gray", "gray", "gray"))+
+  geom_flat_violin(alpha = 0.7, position = position_nudge(x = 0.2, y = 0), show.legend = F)+
+  geom_jitter(width = 0.15, alpha = 0.5, show.legend = F)+
+  geom_point(data = summary_top_spectra_models, aes(x = Model, y = Performance), color = "black", position = position_nudge(0.2), show.legend = F)+
+  geom_errorbar(data = summary_top_spectra_models, aes(x = Model, y = Performance, ymin = Performance - ci, ymax = Performance + ci), position = position_nudge(0.2), width = 0.3, color = "black")+
+  scale_y_continuous(limits = c(0,1), breaks = c(0, 0.5, 1))+
+  coord_flip()+
+  theme_classic()+
+  labs(y = "Spearman R",
+       x = NULL,
+       tag = "C")+
+  scale_x_discrete(labels = c("svmLinear", "pls", "pcr", "svmPoly",
+                              "svmRadial", "rf", "lm"))+
+  theme(text = element_text(size = 12))
+
+spectra_model_perf
+
+ggsave(spectra_model_perf, file = "../Manuscript_Images/Spectra_Performance_Plots.png", device = "png", width = 3.75, height = 3, units = "in", dpi = 600)
+```
+Add normalizations to legend under plot.  Make a supplemental figure with all of the normalizations faceted.
+
+
+```{r learning curves}
+lc_reps_macro <- read_csv("../Data/MSI_Data/LC_MSI_Macro_Reps_NP.csv")
+
+lc_reps_macro %>%
+  group_by(Training_Size, Data) %>%
+  summarise(n = n())
+
+lc_macro <- lc_reps_macro %>%
+  group_by(Training_Size, Data) %>%
+  summarise(RMSE = mean(RMSE)) %>%
+  mutate(Data = fct_relevel(Data, c("Training", "Testing"))) %>%
+  ggplot()+
+  aes(x = Training_Size)+
+  aes(y = RMSE)+
+  aes(color = Data)+
+  geom_smooth(se = F, show.legend = F)+  
+  ylim(0.0125, 0.0240)+
+  theme_classic()+
+  scale_color_manual(values = c("#0571b0", "#ca0020"))+
+  labs(x = NULL,
+       y = "RMSE",
+       tag = "B")+
+  theme(legend.position = "bottom",
+        text = element_text(size = 12))
+
+lc_macro
+
+
+lc_reps_spectra <- read_csv("../Data/MSI_Data/LC_MSI_Spectra_Reps_NP.csv")
+
+lc_reps_spectra %>%
+  group_by(Training_Size, Data) %>%
+  summarise(n = n())
+  
+lc_spectra <- lc_reps_spectra %>%
+  group_by(Training_Size, Data) %>%
+  summarise(RMSE = mean(RMSE)) %>%
+  mutate(Data = fct_relevel(Data, c("Training", "Testing"))) %>%
+  ggplot()+
+  aes(x = Training_Size)+
+  aes(y = RMSE)+
+  aes(color = Data)+
+  geom_smooth(se = F)+
+  ylim(0.0125, 0.0240)+
+  scale_color_manual(values = c("#0571b0", "#ca0020"))+
+  theme_classic()+
+  labs(x = "Training Size",
+       y = "RMSE",
+       tag = "D")+
+  theme(legend.position = "bottom",
+        text = element_text(size = 12))
+
+lc_spectra
+
+ggsave(lc_macro, file = "../Manuscript_Images/Macro_Learning_Curve.png", device = "png", width = 3.75, height = 2.8, units = "in", dpi = 600)
+ggsave(lc_spectra, file = "../Manuscript_Images/Spectra_Learning_Curve.png", device = "png", width = 3.75, height = 3.2, units = "in", dpi = 600)
+```
+
+```{r combining plots for figure 2}
+#grid.arrange(macro_model_perf, spectra_model_perf, lc_macro, lc_spectra)
+```
+get rid of x axis label on violin plots.  Add lc legend to bottom (1 row, 2 column)
+
+```{r top model}
+r_svml_spectra <- train(Moisture_Uptake ~ ., 
+                            data = norm_training_data %>%
+                              select_if(is.numeric), 
+                            method = "svmLinear", 
+                            metric = "Rsquared", 
+                            tuneGrid = expand.grid(C = 71.407),
+                            trControl = trainControl(method = "cv",
+                                                     index = groupKFold(norm_training_data$Genotype, k = 10), 
+                                                     savePredictions = T, 
+                                                     #predictionBounds = c(T,T),
+                                                     allowParallel = T
+                                                     )
+                             )
+
+val_predictions <- predict(r_svml_spectra, norm_validation_data)
+```
+
+
+```{r distribution of predictions}
+n5000_data_norm <- n5000_data %>%
+  select(-c(Genotype, Block, Rep, Env)) %>%
+  pivot_longer(cols = -c(SampleID), names_to = "Waveband", values_to = "Absorbance") %>%
+  group_by(SampleID) %>%
+  mutate(sum_lxl_abs = sum(abs(Absorbance)),
+         Norm_Abs = Absorbance / sum_lxl_abs) %>%
+  select(-c(Absorbance, sum_lxl_abs)) %>%
+  ungroup() %>%
+  pivot_wider(id_cols = c(SampleID), 
+              values_from = Norm_Abs, 
+              names_from = Waveband)
+
+n5000_predictions <- predict(r_svml_spectra, n5000_data_norm)
+
+spectra_predictions_R <- tibble(SampleID = norm_validation_data$SampleID,
+                                Genotype = norm_validation_data$Genotype,
+                                R_SVML = val_predictions,
+                                Moisture_Uptake = norm_validation_data$Moisture_Uptake)
+
+n5000_predictions %>%
+  as_tibble() %>%
+  summarise(mean(value),
+            min(value),
+            max(value))
+  
+
+predictions_dist <- n5000_predictions %>%
+  as_tibble() %>%
+  rename(Predicted_Moisture_Uptake = value) %>%
+  mutate(`Training Bounds` = case_when(Predicted_Moisture_Uptake > min(spectra_training_data$Moisture_Uptake) & 
+                                       Predicted_Moisture_Uptake < max(spectra_training_data$Moisture_Uptake) ~ "In",
+                                       Predicted_Moisture_Uptake < min(spectra_training_data$Moisture_Uptake) | 
+                                       Predicted_Moisture_Uptake > max(spectra_training_data$Moisture_Uptake) ~ "Out")) %>%
+  ggplot(aes(x = (Predicted_Moisture_Uptake)*100, fill = `Training Bounds`))+
+  scale_fill_manual(values = c("black", NA))+
+  geom_histogram(color = "darkgray", 
+    bins = 41, show.legend = F)+
+  labs(x = "Predicted Moisture Uptake",
+       tag = "A")+
+  geom_rug(data = spectra_predictions_R %>%
+    mutate(`Training Bounds` = case_when(R_SVML > min(spectra_training_data$Moisture_Uptake) & 
+                                         R_SVML < max(spectra_training_data$Moisture_Uptake) ~ "In",
+                                         R_SVML < min(spectra_training_data$Moisture_Uptake) | 
+                                         R_SVML > max(spectra_training_data$Moisture_Uptake) ~ "Out")), aes(x = (R_SVML)*100))+
+  labs(tag = "A")+
+  theme_classic()+
+  theme(text = element_text(size = 12))
+
+predictions_dist
+
+# For paper
+ggsave(plot = predictions_dist, file = "../Manuscript_Images/Prediction_Distribution.png", device = "png", width = 3.75, height = 3.75, units = "in", dpi = 600)
+
+# For poster
+newplot <- predictions_dist+
+  theme(text = element_text(size = 10))+
+  labs(tag = NULL)
+
+#ggsave(plot = newplot, file = "Prediction_Distribution.png", device = "png", width = 3.75, height = 3.75, units = "in", dpi = 600)
+```
+
+```{r predicted vs actual of best model}
+tidy_spectra_data <- spectra_predictions_R %>%
+  pivot_longer(cols = -c(Moisture_Uptake, Genotype, SampleID), names_to = "Model", values_to = "Predicted_Value") %>%
+  mutate(Model == case_when(Model == "R_SVML" ~ "SVM Linear",
+                            Model == "R_PLS" ~ "PLS"),
+         Data = "Spectra")
+
+final_model_val <- tidy_spectra_data %>%
+  mutate(`Training Bounds` = case_when(Predicted_Value > min(spectra_training_data$Moisture_Uptake) & 
+                                   Predicted_Value < max(spectra_training_data$Moisture_Uptake) ~ "In",
+                                 Predicted_Value < min(spectra_training_data$Moisture_Uptake) | 
+                                   Predicted_Value > max(spectra_training_data$Moisture_Uptake) ~ "Out")) %>%
+  ggplot(aes(x = (Moisture_Uptake)*100, y = (Predicted_Value)*100, shape = `Training Bounds`, color = `Training Bounds`))+
+  scale_shape_manual(values = c(16, 1))+
+  scale_color_manual(values = c("black", NA))+
+  geom_abline(show.legend = F, color = "gray", linetype = "dashed")+
+  geom_point(show.legend = F, color = "black")+
+  geom_smooth(se = F, show.legend = F, method = "lm")+
+  labs(y = "Predicted Moisture Uptake",
+       x = "Actual Moisture Uptake",
+       tag = "B")+
+  ylim(c(26, 52.5))+
+  xlim(c(26, 52.5))+
+  theme_classic()+
+  annotate(geom = "text", x = 40, y = 50, label = expression(paste('r'[s], " = 0.852")))+
+  theme(text = element_text(size = 12))
+
+final_model_val
+
+#library(plotly)
+#ggplotly(final_model_val+
+#           aes(color = `Training Bounds`))
+
+# For Paper
+ggsave(plot = final_model_val, file = "../Manuscript_Images/Correlation_Plot.png", device = "png", width = 3.75, height = 3.75, units = "in", dpi = 600, bg = "transparent")
+
+# For poster
+#newplot <- final_model_val+
+#  ylim(c(0.37, 0.525))+
+#  xlim(c(0.37, 0.525))+
+#  theme(text = element_text(size = 12, color = "white"
+#                            ),
+#        panel.grid.major = element_blank(), 
+#        panel.grid.minor = element_blank(),
+#        panel.background = element_rect(fill = "transparent",colour = NA),
+#        plot.background = element_rect(fill = "transparent",colour = NA),
+#        axis.line = element_line(color = "#ffbf3f"),
+#        axis.text = element_text(color = "#ffbf3f"),
+#        axis.ticks = element_line(color = "#ffbf3f"))+
+#  geom_smooth(se = F, show.legend = F, color = "#ffbf3f", method = "lm")+
+#  geom_point(size = 3, color = "white", show.legend = F)+
+#  labs(tag = NULL)
+
+#ggsave(plot = newplot, file = "Correlation_Plot.png", device = "png", width = 3.75, height = 3.75, units = "in", dpi = 600, bg = "transparent")
+```
+
+
+```{r combining plots for figure 3}
+grid.arrange(predictions_dist, final_model_val, nrow = 1)
+```
+remove training bounds legend - put in text
+
+```{r permuted importance of wavebands}
+norm_validation_data_inliers <- norm_validation_data %>%
+  mutate(Predictions = val_predictions) %>%
+  filter(Predictions > min(norm_training_data$Moisture_Uptake)) %>%
+  select(-Predictions)
+
+pred <- predict(r_svml_spectra, norm_validation_data_inliers)
+baseline <- cor(norm_validation_data_inliers$Moisture_Uptake, pred)^2
+
+cor_table <- NULL
+cor_table_2 <- vector(length = 2)
+library(gtools) # For the permute function
+for(n in 1:100){
+  for(i in 1:141){
+    ### Permute Column ###
+    perm <- permute(norm_validation_data_inliers[[i+3]])
+    new_norm <- norm_validation_data_inliers
+    new_norm[,i+3] <- perm
+    
+    ### Predictions ###
+    new_pred <- predict(r_svml_spectra, new_norm)
+    
+    cor_table_2[2] <- cor(new_norm$Moisture_Uptake, new_pred)^2
+    cor_table_2[1] <- colnames(new_norm[i+3])
+    cor_table <- rbind(cor_table, cor_table_2)
+  }
+}
+
+colnames(cor_table) <- c("Waveband_rm", "R_Squared")
+
+spectra_imp <- cor_table %>%
+  as_tibble() %>%
+  mutate(Waveband_rm = as.numeric(Waveband_rm)) %>%
+  group_by(Waveband_rm) %>%
+  summarise(R_Squared = mean(as.numeric(R_Squared))) %>%
+  mutate(loss = baseline - R_Squared,
+        max_loss = max(loss),
+        relative_loss = loss / max_loss) %>%
+  ggplot(aes(x = Waveband_rm, y = loss, fill = loss))+
+  geom_bar(stat = "identity", width = 5, show.legend = F)+
+  scale_fill_gradient(low = "#e5f5e0", high = "#31a354")+
+  theme_classic()+
+  labs(x = NULL,
+       y = expression(paste("Loss of ", R^2)),
+       tag = "A")+
+  theme(text = element_text(size = 12))
+
+spectra_imp
+
+# For paper
+ggsave(plot = spectra_imp, file = "../Manuscript_Images/Spectra_Importance.png", device = "png", width = 3.75, height = 1.5, units = "in", dpi = 600)
+
+# For poster
+newplot <- spectra_imp+
+  theme(text = element_text(size = 10))+
+  coord_cartesian()+
+  scale_fill_manual(values = "#862633ff")+
+  labs(tag = NULL)
+
+#ggsave(plot = newplot, file = "Spectra_Importance.png", device = "png", width = 3, height = 1.75, units = "in", dpi = 600)
+```
+
+```{r spectra trait anova}
+registerDoParallel(cores = 4)
+spectra_var_source <- foreach(i = 6:146, .combine = rbind) %dopar% {
+  trait_lmer <- lmer(n5000_data[[i]] ~ (1 | Genotype) + (1 | Env/Rep) + 
+                       (1 | Rep/Block) + (1 | Genotype:Env), data = n5000_data, 
+                     REML = T)
+  
+  var_source <- tidy(ranova(trait_lmer)) %>%
+    select(term, p.value) %>%
+    filter(term != "<none>") %>%
+    mutate(term = str_remove_all(string = term, pattern = "[(,1, ,|,)]")) %>%
+    rename(Parameter = term)
+  
+  var_exp <- summary(trait_lmer)[[13]] %>%
+    as_data_frame() %>%
+    select(grp, sdcor) %>%
+    rename(Parameter = grp, 
+          StDev = sdcor) %>%
+    mutate(var = StDev^2,
+           total_var = sum(var),
+           Percent_Var = (var/total_var) * 100) %>%
+    select(Parameter, Percent_Var) %>%
+    full_join(var_source) %>%
+    mutate(Trait = colnames(n5000_data[i]))
+  
+  return(list(
+    Parameter = var_exp$Parameter,
+    Percent_Variance = var_exp$Percent_Var,
+    Trait = var_exp$Trait
+  ))
+}
+stopImplicitCluster()
+
+spectra_var_source
+
+waveband_perms <- cor_table %>%
+              as_tibble() %>%
+              mutate(Trait = as.character(as.numeric(Waveband_rm))) %>%
+              group_by(Trait) %>%
+              summarise(R_Squared = mean(as.numeric(R_Squared))) %>%
+              mutate(loss = baseline - R_Squared,
+                    max_loss = max(loss),
+                    relative_loss = loss / max_loss) %>%
+  select(Trait, loss)
+
+spectra_var_source_plot <- spectra_var_source %>%
+  as_tibble() %>%
+  unnest(cols = c(Parameter, Percent_Variance, Trait)) %>%
+  mutate(Parameter = fct_relevel(Parameter, c("Genotype", "Env", "Genotype:Env", 
+                                              "Rep:Env", "Rep", "Block:Rep", 
+                                              "Residual"))) %>%
+  full_join(waveband_perms) %>%
+  #filter(Parameter != "Rep",
+   #      Parameter != "Rep:Env",
+    #     Parameter != "Block:Rep") %>%
+  ggplot(aes(x = as.numeric(Trait), y = Percent_Variance, fill = loss))+
+  geom_bar(stat = "identity", width = 5)+
+  scale_fill_viridis_c(option = "C")+
+  scale_y_continuous(limits = c(0,85), breaks = c(20, 40, 60, 80))+
+  scale_fill_gradient(low = "#e5f5e0", high = "#31a354")+
+  labs(x = "Waveband",
+       y = "Percent Variance Explained",
+       tag = "B",
+       fill = "Loss")+
+  facet_wrap(~Parameter, ncol = 1, labeller = labeller(Parameter = c(Genotype = "G", 
+                                                           Env = "E", 
+                                                           `Genotype:Env` = "GxE", 
+                                                           `Rep:Env` = "R/E", 
+                                                           Rep = "R", 
+                                                           `Block:Rep` = "B/R",
+                                                           Residual = "e")))+
+  theme_classic()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        axis.text.y = element_text(),
+        text = element_text(size = 12),
+        strip.background = element_blank(),
+        legend.position = "bottom")
+
+spectra_var_source_plot
+
+# For paper
+ggsave(plot = spectra_var_source_plot, file = "../Manuscript_Images/Spectral_Variance_Explained.png", device = "png", width = 3.75, height = 8.5, units = "in", dpi = 600)
+
+spectra_var_source %>%
+  as_tibble() %>%
+  unnest(cols = c(Parameter, Percent_Variance, Trait)) %>%
+  mutate(Parameter = fct_relevel(Parameter, c("Genotype", "Env", "Genotype:Env", 
+                                              "Rep:Env", "Rep", "Block:Rep", 
+                                              "Residual"))) %>%
+  group_by(Parameter) %>%
+  summarise(mean_pve = mean(Percent_Variance))
+
+# For poster
+newplot <- spectra_var_source_plot+
+  theme(text = element_text(size = 10),
+        axis.text.x = element_text(size = 10))+
+  ylim(c(0,50))+
+  scale_y_continuous(breaks = c(10,40))+
+  labs(tag = NULL, 
+       title = NULL)
+
+#ggsave(plot = newplot, file = "Spectral_Variance_Explained.png", device = "png", width = 3, height = 1.75, units = "in", dpi = 600)
+```
+
+```{r combining plots for figure 4}
+grid.arrange(spectra_imp, spectra_var_source_plot, ncol = 1)
+```
+Flip axes of A
+
+```{r anova on n5000 predictions}
+n5000_lmer_data <- read_csv("../Data/Manuscript_Data/N5000_Prediction_Dataset.csv") %>%
+  select(Genotype, Env, Block, Rep, SVML_Prediction)
+
+trait_lmer <- n5000_lmer_data %$%
+  lmer(SVML_Prediction ~ (1 | Genotype) + (1 | Env/Rep) + (1 | Rep/Block) + (1 | Genotype:Env), REML = T) # (1|Env) is left out of the equation since the nesting with rep variable accounts for env.  If you add env itself to the equation, ranova wont work since there are technically two environments. After comparing with and without env models, the addition of env only accounts for 0.000012 units of stdev.
+  
+var_source <- tidy(ranova(trait_lmer)) %>%
+  dplyr::select(term, p.value) %>%
+  filter(term != "<none>") %>%
+  mutate(term = str_remove_all(string = term, pattern = "[(,1, ,|,)]")) %>%
+  rename(Parameter = term)
+
+var_exp <- summary(trait_lmer)[[13]] %>%
+  as_tibble() %>%
+  dplyr::select(grp, sdcor) %>%
+  rename(Parameter = grp, 
+        StDev = sdcor) %>%
+  mutate(var = StDev^2,
+         total_var = sum(var),
+         Percent_Var = (var/total_var) * 100) %>%
+  dplyr::select(Parameter, Percent_Var) %>%
+  full_join(var_source)
+
+var_exp_all <- var_exp %>%
+  mutate(Parameter = fct_relevel(Parameter, c("Residual", "Block:Rep", "Rep", "Rep:Env", 
+                                              "Genotype:Env", "Env", "Genotype"))) %>%
+  ggplot(aes(x = Parameter, y = Percent_Var))+
+  geom_bar(stat = "identity")+
+  coord_flip()+
+  scale_x_discrete(labels = c("e", "B/R", "R", "R/E", "GxE", "E", "G"))+
+  ylim(0,52)+
+  labs(x = NULL,
+       y = NULL,
+       subtitle = "All Inbreds",
+       tag = "A")+
+  theme_classic()+
+  theme(axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        text = element_text(size = 12))
+
+var_exp_all
+
+ggsave(plot = var_exp_all, file = "../Manuscript_Images/All_Het_Variance_Explained.png", device = "png", width = 3.75, height = 1.6, units = "in", dpi = 600)
+```
+
+```{r anova on dent corn predictions only}
+hetgrps <- read_xlsx("../Data/maize_allWiDiv_genotype_info.xlsx") %>%
+  select(WiDivGenotype, heterotic_group_consensus) %>%
+  rename(Genotype = WiDivGenotype)
+
+n5000_lmer_data_het <- read_csv("../Data/Manuscript_Data/N5000_Prediction_Dataset.csv") %>%
+  select(SampleID, Genotype, Env, Block, Rep, SVML_Prediction) %>%
+  full_join(hetgrps) %>%
+  mutate(Het_Group = case_when(heterotic_group_consensus == "stiff_stalk" | 
+                   heterotic_group_consensus == "non_stiff_stalk" |
+                   heterotic_group_consensus == "iodent" ~ "Dent",
+                   heterotic_group_consensus == "sweet_corn" |
+                   heterotic_group_consensus == "popcorn" |
+                   heterotic_group_consensus == "flint" ~ "Pop_Sweet_Flint",
+                   heterotic_group_consensus == "unknown" |
+                   heterotic_group_consensus == "mixed" |
+                   heterotic_group_consensus == "tropical" ~ "Other"))
+
+var_exp_comb <- NULL
+
+for(i in c("Dent", "Pop_Sweet_Flint", "Other")){
+  df <- n5000_lmer_data_het %>%
+    filter(Het_Group == i)
+  
+  trait_lmer_het <- df %$%
+  lmer(SVML_Prediction ~ (1 | Genotype) + (1 | Env/Rep) + (1 | Rep/Block) + (1 | Genotype:Env), REML = T) # (1|Env) is left out of the equation since the nesting with rep variable accounts for env.  If you add env itself to the equation, ranova wont work since there are technically two environments. After comparing with and without env models, the addition of env only accounts for 0.000012 units of stdev.
+  
+  var_source_het <- tidy(ranova(trait_lmer_het)) %>%
+    select(term, p.value) %>%
+    filter(term != "<none>") %>%
+    mutate(term = str_remove_all(string = term, pattern = "[(,1, ,|,)]")) %>%
+    rename(Parameter = term)
+  
+  var_exp_het <- summary(trait_lmer_het)[[13]] %>%
+    as_data_frame() %>%
+    select(grp, sdcor) %>%
+    rename(Parameter = grp, 
+          StDev = sdcor) %>%
+    mutate(var = StDev^2,
+           total_var = sum(var),
+           Percent_Var = (var/total_var) * 100) %>%
+    select(Parameter, Percent_Var) %>%
+    mutate(Group = i) %>%
+    full_join(var_source_het)
+  
+  var_exp_comb <- bind_rows(var_exp_comb, var_exp_het)
+}
+
+dent_var_exp <- var_exp_comb %>%
+  mutate(Parameter = fct_relevel(Parameter, c("Residual", "Block:Rep", "Rep", "Rep:Env", 
+                                              "Genotype:Env", "Env", "Genotype")),
+         Group = fct_relevel(Group, c("Other", "Pop_Sweet_Flint", "Dent"))) %>%
+  filter(Group == "Dent") %>%
+  ggplot(aes(x = Parameter, y = Percent_Var))+
+  geom_bar(stat = "identity")+
+  coord_flip()+
+  scale_x_discrete(labels = c("e", "B/R", "R", "R/E", "GxE", "E", "G"))+
+  ylim(0,55)+
+  scale_y_continuous(breaks = c(0,10,20,30,40,50))+
+  labs(x = NULL,
+       y = "Percent Variance Explained",
+       subtitle = "Dent Inbreds",
+       tag = "B")+
+  theme_classic()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        text = element_text(size = 12))
+
+dent_var_exp
+
+# For paper
+ggsave(plot = dent_var_exp, file = "../Manuscript_Images/Dent_Variance_Explained.png", device = "png", width = 3.75, height = 2, units = "in", dpi = 600)
+
+
+# For poster
+newplot <- dent_var_exp+
+  theme(text = element_text(size = 10))+
+  labs(subtitle = NULL,
+       tag = NULL)+
+  scale_x_discrete(labels = c("e", "B/R", "R", "R/E", "G:E", "E", "G"))+
+  theme_classic()
+
+#ggsave(plot = newplot, file = "Dent_Variance_Explained.png", device = "png", width = 3, height = 1.75, units = "in", dpi = 600)
+```
+Change this to just dent
+
+```{r combining figure 5}
+grid.arrange(var_exp_all, dent_var_exp)
+```
+
+
+n5000_data_norm_var_exp <-   
+  read_csv("../Data/MSI_Data/Spectra_Explaining_Variation_Sources.csv", 
+           col_types = cols(Parameter = col_character(), 
+                            Percent_Var = col_double(),
+                            Feature = col_character())) %>% 
+  mutate(Feature = as.character(Feature))
+
+baseline_spec_exp <- n5000_data_norm_var_exp %>%
+  filter(Feature == "Baseline") %>%
+  rename(Baseline = Percent_Var) %>%
+  select(-Feature)
+
+
+n5000_data_norm_var_exp %>%
+  filter(Feature != "Baseline") %>%
+  group_by(Feature, Parameter) %>%
+  summarise(Mean_Percent_Var = mean(Percent_Var)) %>%
+  full_join(baseline_spec_exp) %>%
+  mutate(Loss = Baseline - Mean_Percent_Var) %>%
+  ungroup() %>%
+  mutate(Feature = as.numeric(Feature)) %>%
+  mutate(Parameter = fct_relevel(Parameter, c("Genotype", "Env", "Genotype:Env", 
+                                              "Rep:Env", "Rep", "Block:Rep", 
+                                              "Residual"))) %>%
+  ggplot(aes(x = Feature, y = Loss))+
+  geom_bar(stat = "identity", width = 5)+
+  coord_flip()+
+  facet_wrap(~Parameter, nrow = 1)+
+  theme_bw()
+
+n5000_data_norm_var_exp %>%
+  filter(Feature != "Baseline") %>%
+  group_by(Feature, Parameter) %>%
+  summarise(Mean_Percent_Var = mean(Percent_Var)) %>%
+  full_join(baseline_spec_exp) %>%
+  mutate(Loss = Baseline - Mean_Percent_Var) %>%
+  ungroup() %>%
+  mutate(Feature = as.numeric(Feature)) %>%
+  mutate(Parameter = fct_relevel(Parameter, c("Genotype", "Env", "Genotype:Env", 
+                                              "Rep:Env", "Rep", "Block:Rep", 
+                                              "Residual"))) %>%
+  ggplot(aes(x = Feature, y = Mean_Percent_Var))+
+  geom_bar(stat = "identity", width = 5)+
+  coord_flip()+
+  facet_wrap(~Parameter, nrow = 1)+
+  theme_bw()
+
+
+```{r heritability of composition and moisture uptake predictions in N5000 dataset}
+n5000_lmer_data_traits <- read_csv("../Data/N5000_Master_With_Predictions.csv") %>%
+  select(c(1:10, 152))
+
+registerDoParallel(cores = 4)
+trait_var_source_n5000 <- foreach(i = 6:11, .combine = rbind) %dopar% {
+  trait_lmer <- lmer(n5000_lmer_data_traits[[i]] ~ (1 | Genotype) + (1 | Env/Rep) + (1 | Rep/Block) + (1 | Genotype:Env), 
+                     data = n5000_lmer_data_traits, REML = T)
+  
+  var_source <- tidy(ranova(trait_lmer)) %>%
+    select(term, p.value) %>%
+    filter(term != "<none>") %>%
+    mutate(term = str_remove_all(string = term, pattern = "[(,1, ,|,)]")) %>%
+    rename(Parameter = term)
+  
+  var_exp <- summary(trait_lmer)[[13]] %>%
+    as_data_frame() %>%
+    select(grp, vcov) %>%
+    rename(Parameter = grp, 
+          var = vcov) %>%
+    mutate(total_var = sum(var),
+           Percent_Var = (var/total_var) * 100) %>%
+    select(Parameter, var, Percent_Var) %>%
+    full_join(var_source) %>%
+    mutate(Trait = colnames(n5000_lmer_data_traits[i]))
+  
+  return(list(
+    Parameter = var_exp$Parameter,
+    Variance = var_exp$var,
+    Percent_Variance = var_exp$Percent_Var,
+    Trait = var_exp$Trait
+  ))
+}
+stopImplicitCluster()
+beep(8)
+
+trait_var_source_n5000 %>%
+  as_tibble() %>%
+  unnest(cols = Parameter, Variance, Percent_Variance, Trait) %>%
+  mutate(n_env = 5,
+         n_reps = 2) %>%
+  select(Parameter, Variance, Trait, n_env, n_reps) %>%
+  filter(Parameter == "Genotype" |
+         Parameter == "Genotype:Env" |
+         Parameter == "Residual") %>%
+  pivot_wider(id_cols = -c(Parameter, Variance), names_from = Parameter, values_from = Variance) %>%
+  mutate(Heritability = Genotype / (Genotype + (`Genotype:Env` / n_env) + (Residual / (n_env * n_reps))))
+```
+Ask Jonathan if he only used the subset that had genotypic data.
+
+```{r jonathan's heritability calculations}
+registerDoParallel(cores = 4)
+trait_var_source_n5000_j <- foreach(i = 6:11, .combine = rbind) %dopar% {
+  trait_lmer <- lmer(n5000_lmer_data_traits[[i]] ~ (1 | Genotype) + (1 | Env) + (1 | Env/Rep) + (1 | Rep/Block) + (1 | Genotype:Env), 
+                     data = n5000_lmer_data_traits, REML = T)
+  
+  model_variances <- as.data.frame(VarCorr(trait_lmer))
+  h2 <- model_variances$vcov[2]/(model_variances$vcov[2]+(model_variances$vcov[1]/5)+(model_variances$vcov[8]/10))
+  
+  return(list(
+    Trait = colnames(n5000_lmer_data_traits[i]),
+    h2 = h2
+  ))
+}
+stopImplicitCluster()
+
+trait_var_source_n5000_j
+```
+
+```{r heritability of composition and moisture uptake in N400 dataset}
+trait_var_source %>%
+  as_tibble() %>%
+  unnest(cols = Parameter, Variance, Percent_Variance, Trait) %>%
+  mutate(n_env = 2,
+         n_reps = 2) %>%
+  select(Parameter, Variance, Trait, n_env, n_reps) %>%
+  filter(Parameter == "Genotype" |
+         Parameter == "Genotype:Env" |
+         Parameter == "Residual") %>%
+  pivot_wider(id_cols = -c(Parameter, Variance), names_from = Parameter, values_from = Variance) %>%
+  mutate(Heritability = Genotype / (Genotype + (`Genotype:Env` / n_env) + (Residual / (n_env * n_reps))))
+```
+
+```{r Environment correlations for GWAS}
+environment_mups <- n5000_data %>%
+  mutate(Moisture_Uptake = n5000_predictions) %>%
+  group_by(Genotype, Env) %>%
+  summarise(mean_mup = mean(Moisture_Uptake, na.rm = T)) %>%
+  pivot_wider(id_cols = Genotype, names_from = Env, values_from = mean_mup) %>%
+  ungroup %>%
+  select(-Genotype)
+
+tidy(cor.test(environment_mups[[1]], environment_mups[[2]])) %>%
+  select(p.value) %>%
+  pull()
+
+cor_matrix_p <- matrix(ncol = 5, nrow = 5)
+cor_matrix <- matrix(ncol = 5, nrow = 5)
+for(i in 1:5) {
+  for(n in 1:5){
+    pval <- tidy(cor.test(environment_mups[[i]], environment_mups[[n]], method = "spearman")) %>%
+      select(p.value, estimate)
+    cor_matrix_p[i,n] <- pval %>%
+      select(p.value) %>%
+      pull()
+    cor_matrix[i,n] <- pval %>%
+      select(estimate) %>%
+      pull()
+  }
+}
+cor_matrix %>%
+  as_tibble() %>%
+  write_csv("../Data/Manuscript_Data/environment_correlations.csv")
+cor_matrix_p %>%
+  as_tibble() %>%
+  write_csv("../Data/Manuscript_Data/environment_correlations_pvals.csv")
+```
+
+```{r}
+prcomp(n5000_data %>%
+  mutate(Moisture_Uptake = n5000_predictions) %>%
+  group_by(Genotype, Env) %>%
+  summarise(mean_mup = mean(Moisture_Uptake, na.rm = T)) %>%
+  pivot_wider(id_cols = Genotype, names_from = Env, values_from = mean_mup) %>%
+  ungroup %>%
+  select(-Genotype), na.action(na.omit(.)))
+```
+
+```{r all top macro models supp fig}
+summary_top_macro_models <- Rmisc::summarySE(top_macro_models %>%
+                                                select(Model, Performance, Part_CV) %>%
+                                                ungroup(), 
+  measurevar = "Performance", 
+  groupvars = "Model")
+
+model_labs <- c("lm", "svmRadial", "svmLinear", "svmPoly", "rf", "cart", "knn")
+names(model_labs) <- c("LM", "SVMR", "SVML", "SVMP", "RF", "CART", "KNN")
+
+macro_model_perf <- top_macro_models %>%
+  select(Model, Performance, Part_CV) %>%
+  filter(Part_CV != "Genotype_Random") %>%
+  ungroup() %>% 
+  mutate(Model = fct_relevel(Model, c("LM", "SVMR", "SVML", "SVMP", "RF", "RPART", "KNN"))) %>%
+  ggplot(aes(x = Model, y = Performance))+
+  geom_flat_violin(color = "gray", fill = "gray", alpha = 0.7, position = position_nudge(x = 0.2, y = 0), show.legend = F)+
+  geom_jitter(color = "gray", width = 0.15, alpha = 0.5, show.legend = F)+
+  scale_x_discrete(labels = c("lm", "svmRadial", "svmLinear", "svmPoly", "rf", "rpart", "knn"))+
+  geom_point(data = summary_top_macro_models, aes(x = Model, y = Performance), position = position_nudge(0.2), inherit.aes = F)+
+  geom_errorbar(data = summary_top_macro_models, aes(x = Model, y = Performance, ymin = Performance - ci, ymax = Performance + ci), position = position_nudge(c(0.2)), width = 0.3, inherit.aes = F)+
+  scale_y_continuous(limits = c(0,1), breaks = c(0, 0.5, 1))+
+  coord_flip()+
+  theme_classic()+
+  labs(y = "Spearman R",
+       x = NULL,
+       tag = "A")+
+  facet_wrap(~Split, ncol = 1)+
+  theme(text = element_text(size = 12), strip.background = element_blank())
+
+macro_model_perf
+
+ggsave(macro_model_perf, file = "../Manuscript_Images/All_Macro_Performance_Plots.png", device = "png", width = 3.75, height = 8, units = "in", dpi = 600)
+```
+
+```{r all top spectra models supp fig}
+summary_top_spectra_models <- Rmisc::summarySE(top_spectra_models, measurevar = "Performance", groupvars = "Model")
+
+spectra_model_perf <- msi_spectra_raw_full %>%
+  group_by(Partition, dataset, CV, Bounds, Model, Metric, Data, Intercept, Mtry, Ncomp, C) %>%
+  mutate(Mean_Performance = mean(Performance),
+            St_Dev_Performance = sd(Performance),
+            n = n()) %>%
+  filter(Bounds == "No") %>%
+  filter(CV == Partition) %>%
+  group_by(Model, Partition, CV) %>%
+  arrange(desc(Mean_Performance)) %>% 
+  mutate(number = row_number()) %>%
+  filter(number <= 100) %>%
+  select(Model, dataset, Performance) %>%
+  ungroup() %>% 
+  mutate(Model = fct_relevel(Model, c("SVML", "PLS", "PCR", "SVMP", "SVMR", "RF", "LM"))) %>%
+  ggplot()+
+  aes(x = Model)+
+  aes(y = Performance)+
+  aes(fill = Model)+
+  aes(color = Model)+
+  scale_fill_manual(values = c("gray", "gray", "gray", "gray", "gray", "gray", "gray"))+
+  scale_color_manual(values = c("gray", "gray", "gray", "gray", "gray", "gray", "gray"))+
+  geom_flat_violin(alpha = 0.7, position = position_nudge(x = 0.2, y = 0), show.legend = F)+
+  geom_jitter(width = 0.15, alpha = 0.5, show.legend = F)+
+  geom_point(data = summary_top_spectra_models, aes(x = Model, y = Performance), color = "black", position = position_nudge(0.2), show.legend = F)+
+  geom_errorbar(data = summary_top_spectra_models, aes(x = Model, y = Performance, ymin = Performance - ci, ymax = Performance + ci), position = position_nudge(0.2), width = 0.3, color = "black")+
+  scale_y_continuous(limits = c(0,1), breaks = c(0, 0.5, 1))+
+  coord_flip()+
+  theme_classic()+
+  labs(y = "Spearman R",
+       x = NULL,
+       tag = "B")+
+  scale_x_discrete(labels = c("svmLinear", "pls", "pcr", "svmPoly",
+                              "svmRadial", "rf", "lm"))+
+  facet_wrap(~Partition, ncol = 1)+
+  theme(text = element_text(size = 12), strip.background = element_blank())
+
+spectra_model_perf
+
+ggsave(spectra_model_perf, file = "../Manuscript_Images/All_Spectra_Performance_Plots.png", device = "png", width = 3.75, height = 8, units = "in", dpi = 600)
+```
+
+```{r common snps between moisture uptake and composition}
+mup_sig_gwas <- read_csv("../GWAS_SNPs_Sig_Above_5.csv") %>%
+  filter(!is.na(SNP))
+read_csv("../jonathan_significant_SNP_hits.csv") %>%
+  select(c(1:3)) %>%
+  filter(Chromosome %in% mup_sig_gwas$Chromosome & Position %in% mup_sig_gwas$Chromosome) # No matches to SNPs in Jonathan's dataset.
+```
+
+```{r}
+predicted_mup_comp_cor_plot <- read_csv("../Moisture_Prediction_Tables - N5000_Predictions.csv", skip = 1) %>%
+  select(Protein_As_is, Starch_As_is, Fiber_As_is, Ash_As_is, Fat_As_is, SVML_Prediction) %>%
+  pivot_longer(cols = -SVML_Prediction, names_to = "Trait", values_to = "Composition") %>%
+  mutate(Trait = case_when(Trait == "Protein_As_is" ~ "Protein",
+                           Trait == "Starch_As_is" ~ "Starch",
+                           Trait == 'Fat_As_is' ~ "Fat",
+                           Trait == "Fiber_As_is" ~ "Fiber",
+                           Trait == "Ash_As_is" ~ "Ash"),
+         Trait = fct_relevel(Trait, c("Fiber", "Starch", "Fat", "Protein", "Ash"))) %>%
+  ggplot(aes(x = Composition, y = SVML_Prediction))+
+  geom_point()+
+  geom_smooth(se = F, method = "lm", color = "gray50")+
+  facet_wrap(~Trait, scales = "free")+
+  labs(y = "Predicted Moisture Uptake",
+       tag = "B")+
+  theme_classic()+
+  theme(text = element_text(size = 12), strip.background = element_blank())
+
+ggsave(predicted_mup_comp_cor_plot, file = "../Manuscript_Images/Prediction_Composition_Correlation.png", device = "png", width = 7.5, height = 4, units = "in", dpi = 600)
+
+kernel_composition <- read_csv("../Moisture_Prediction_Tables - N5000_Predictions.csv", skip = 1) %>%
+  select(Protein_As_is, Starch_As_is, Fiber_As_is, Ash_As_is, Fat_As_is, SVML_Prediction) 
+
+cor.test(kernel_composition$Protein_As_is, kernel_composition$SVML_Prediction)
+cor.test(kernel_composition$Starch_As_is, kernel_composition$SVML_Prediction)
+cor.test(kernel_composition$Fat_As_is, kernel_composition$SVML_Prediction)
+cor.test(kernel_composition$Fiber_As_is, kernel_composition$SVML_Prediction)
+cor.test(kernel_composition$Ash_As_is, kernel_composition$SVML_Prediction)
+```
+
+```{r}
+actual_mup_comp_cor_plot <- macro_training_data %>%
+  select(-c(1:2)) %>%
+  pivot_longer(cols = -Moisture_Uptake, names_to = "Trait", values_to = "Composition") %>%
+  mutate(Trait = case_when(Trait == "Protein_As_is" ~ "Protein",
+                           Trait == "Starch_As_is" ~ "Starch",
+                           Trait == 'Fat_As_is' ~ "Fat",
+                           Trait == "Fiber_As_is" ~ "Fiber",
+                           Trait == "Ash_As_is" ~ "Ash"),
+         Trait = fct_relevel(Trait, c("Fiber", "Starch", "Fat", "Protein", "Ash"))) %>%
+  ggplot(aes(x = Composition, y = Moisture_Uptake))+
+  geom_point()+
+  geom_smooth(se = F, method = "lm", color = "gray50")+
+  facet_wrap(~Trait, scales = "free")+
+  labs(y = "Moisture Uptake",
+       tag = "A")+
+  theme_classic()+
+  theme(text = element_text(size = 12), strip.background = element_blank())
+
+ggsave(actual_mup_comp_cor_plot, file = "../Manuscript_Images/Actual_Mup_Composition_Correlation.png", device = "png", width = 7.5, height = 4, units = "in", dpi = 600)
+
+cor.test(macro_training_data$Protein_As_is, macro_training_data$Moisture_Uptake)
+cor.test(macro_training_data$Starch_As_is, macro_training_data$Moisture_Uptake)
+cor.test(macro_training_data$Fat_As_is, macro_training_data$Moisture_Uptake)
+cor.test(macro_training_data$Fiber_As_is, macro_training_data$Moisture_Uptake)
+cor.test(macro_training_data$Ash_As_is, macro_training_data$Moisture_Uptake)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r determining reason for outliers in validation set}
+hetgrps2 <- hetgrps %>%
+  mutate(Genotype = str_remove_all(string = Genotype, pattern = "-"),
+         Genotype = str_remove_all(string = Genotype, pattern = " "),
+         Genotype = str_remove_all(string = Genotype, pattern = "\\.0"),
+         Genotype = toupper(Genotype),
+         Genotype = str_remove_all(string = Genotype, pattern = "_"))
+
+tidy_spectra_data %>%
+  mutate(Genotype = str_remove_all(string = Genotype, pattern = "-"),
+         Genotype = str_remove_all(string = Genotype, pattern = " "),
+         Genotype = str_remove_all(string = Genotype, pattern = "\\.0"),
+         Genotype = toupper(Genotype)) %>%
+  full_join(hetgrps2) %>%
+  filter(!is.na(SampleID)) %>%
+  mutate(`Training Bounds` = case_when(Predicted_Value > min(spectra_training_data$Moisture_Uptake) & 
+                                   Predicted_Value < max(spectra_training_data$Moisture_Uptake) ~ "In",
+                                 Predicted_Value < min(spectra_training_data$Moisture_Uptake) | 
+                                   Predicted_Value > max(spectra_training_data$Moisture_Uptake) ~ "Out")) %>%
+  group_by(heterotic_group_consensus, `Training Bounds`) %>%
+  summarise(n = n()) %>%
+  group_by(heterotic_group_consensus) %>%
+  mutate(n_group = sum(n)) %>%
+  group_by(`Training Bounds`) %>%
+  mutate(n_bounds = sum(n)) %>%
+  ungroup() %>%
+  mutate(total_n = sum(n),
+         prop_group = n_group / total_n,
+         prop_bound = n_bounds / total_n,
+         exp = prop_group * prop_bound * total_n,
+         sqdev = sum((n - exp)^2) / exp) %>%
+  select(heterotic_group_consensus, `Training Bounds`, n, exp, sqdev)
+  
+tidy_spectra_data %>%
+  mutate(Genotype = str_remove_all(string = Genotype, pattern = "-"),
+         Genotype = str_remove_all(string = Genotype, pattern = " "),
+         Genotype = str_remove_all(string = Genotype, pattern = "\\.0"),
+         Genotype = toupper(Genotype)) %>%
+  full_join(hetgrps2) %>%
+  filter(!is.na(SampleID)) %>%
+  mutate(`Training Bounds` = case_when(Predicted_Value > min(spectra_training_data$Moisture_Uptake) & 
+                                   Predicted_Value < max(spectra_training_data$Moisture_Uptake) ~ "In",
+                                 Predicted_Value < min(spectra_training_data$Moisture_Uptake) | 
+                                   Predicted_Value > max(spectra_training_data$Moisture_Uptake) ~ "Out"),
+         Sample_Year = str_extract(string = SampleID, pattern = "YC[0-9][0-9]")) %>%
+  ggplot(aes(x = Moisture_Uptake, y = Predicted_Value, label = heterotic_group_consensus, color = Sample_Year))+
+  geom_text()+
+  scale_color_manual(values = c("red", "blue"))+
+  geom_abline(show.legend = F, color = "gray", linetype = "dashed")+
+  geom_point(show.legend = F, color = "black")+
+  geom_smooth(se = F, show.legend = F, method = "lm")+
+  labs(y = "Predicted Moisture Uptake",
+       x = "Actual Moisture Uptake")+
+  theme_classic()
+```
+
+```{r determining reason for outliers in n5000}
+hetgrps <- read_xlsx("../Data/maize_allWiDiv_genotype_info.xlsx") %>%
+  select(WiDivGenotype, heterotic_group_consensus) %>%
+  rename(Genotype = WiDivGenotype)
+
+n5000_lmer_data_het <- read_csv("../Data/N5000_Master_With_Predictions.csv") %>%
+  select(SampleID, Genotype, Env, Block, Rep, SVML_Prediction) %>%
+  mutate(Genotype = str_remove_all(string = Genotype, pattern = "-"),
+         Genotype = str_remove_all(string = Genotype, pattern = " "),
+         Genotype = str_remove_all(string = Genotype, pattern = "\\.0"),
+         Genotype = str_remove_all(string = Genotype, pattern = "_"),
+         Genotype = toupper(Genotype)) %>%
+  full_join(hetgrps2)
+
+trait_lmer <- lmer(SVML_Prediction ~ (1 | Genotype) + (1 | Env) + (1 | Env/Rep) + (1 | Rep/Block) + (1 | Genotype:Env), 
+                     data = n5000_lmer_data_het, REML = T)
+
+random_effects <- ranef(trait_lmer)
+
+tibble(Genotype = rownames(random_effects$Genotype),
+       BLUP = random_effects$Genotype[[1]]) %>%
+  full_join(hetgrps2) %>%
+  filter(!is.na(BLUP)) %>%
+  write_csv("../Data/Manuscript_Data/Genotype_Information.csv")
+
+library(ggmosaic)
+
+n5000_lmer_data_het %>%
+  mutate(`Training Bounds` = case_when(SVML_Prediction > 
+                                         min(spectra_training_data$Moisture_Uptake) & 
+                                       SVML_Prediction < 
+                                         max(spectra_training_data$Moisture_Uptake) ~ "In",
+                                       SVML_Prediction < 
+                                         min(spectra_training_data$Moisture_Uptake) | 
+                                       SVML_Prediction > 
+                                         max(spectra_training_data$Moisture_Uptake) ~ "Out")) %>%
+  filter(!is.na(`Training Bounds`)) %>%
+  filter(!is.na(heterotic_group_consensus)) %>%
+  mutate(heterotic_group_consensus = fct_relevel(heterotic_group_consensus, 
+                                                 c('stiff_stalk', 
+                                                   'non_stiff_stalk', 
+                                                   'unknown',
+                                                   'iodent', 
+                                                   'mixed',
+                                                   'tropical',
+                                                   'popcorn',
+                                                   'sweet_corn', 
+                                                   'flint'))) %>%
+  ggplot()+
+  geom_mosaic(aes(x = product(heterotic_group_consensus), fill = `Training Bounds`))+
+  labs(x = "Heterotic Group", y = "Proportion Extrapolated")
+```
+
+```{r does analysis time affect whether or not a sample is extrapolated}
+ID_Decoder <- read_csv("../Data/YC_ID_Decoder.csv") %>%
+  select(-c(Entry, Source)) %>%
+  rename(SampleID = Plot)
+
+extrap_data <- read_xlsx("../Data/Macro_Trait_Data/art_ground-corn_2nd-round.xlsx") %>%
+  filter(!is.na(SampleID)) %>%
+  filter(!str_detect(string = SampleID, pattern = "T")) %>%
+  mutate(rownum = row_number()) %>%
+  arrange(SampleID) %>%
+  mutate(SampleID = toupper(SampleID),
+         SampleID = str_remove_all(string = SampleID, pattern = "`"),
+         SampleID = str_remove_all(string = SampleID, pattern = "~"),
+         SampleID = str_remove_all(string = SampleID, pattern = "^[0-9]+")) %>%
+  filter(SampleID != "") %>%
+  filter(str_detect(string = SampleID, pattern = "^Y")) %>%
+  mutate(SampleID = str_remove(string = SampleID, pattern = "_RESCAN")) %>%
+  filter(!str_length(string = SampleID) == 8) %>%
+  mutate(SampleID = str_extract(string = SampleID, pattern = "YC[0-9][0-9]:[0-9][0-9][0-9][0-9]")) %>%
+  arrange(desc(rownum)) %>%
+  distinct(SampleID, .keep_all = T) %>%
+  arrange(SampleID) %>%
+  select(-rownum) %>%
+  full_join(ID_Decoder) %>%
+  mutate(Location = case_when(str_detect(string = SampleID, pattern = "YC16:") & Location == "UMN" ~ 1,
+                         str_detect(string = SampleID, pattern = "YC16:") & Location == "ISU" ~ 2,
+                         str_detect(string = SampleID, pattern = "YC17:") & Location == "UMN" ~ 3,
+                         str_detect(string = SampleID, pattern = "YC17:") & Location == "ISU" ~ 4,
+                         str_detect(string = SampleID, pattern = "YC17:") & Location == "MU" ~ 5)) %>%
+  rename(Env = Location) %>%
+  arrange(SampleID) %>%
+  group_by(Genotype, Block, Env) %>%
+  mutate(Rep = case_when(str_detect(string = SampleID, pattern = ":1") ~ 1,
+                         str_detect(string = SampleID, pattern = ":3") ~ 1,
+                         str_detect(string = SampleID, pattern = ":5") ~ 1,
+                         str_detect(string = SampleID, pattern = ":2") ~ 2,
+                         str_detect(string = SampleID, pattern = ":4") ~ 2,
+                         str_detect(string = SampleID, pattern = ":6") ~ 2)) %>%
+  filter(!is.na(`Amylopectin_average`)) %>%
+  ungroup() %>%
+  select(SampleID, `Analysis Time`) %>%
+  full_join(n5000_lmer_data_het) %>%
+  mutate(date = str_extract(string = `Analysis Time`, pattern = "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]"),
+         year = as.numeric(str_extract(string = date, pattern = "[0-9][0-9][0-9][0-9]")),
+         month = str_extract(string = date, pattern = "-[0-9][0-9]-"),
+         month = as.numeric(str_remove_all(string = month, pattern = "-")),
+         day = as.numeric(str_remove(string = date, pattern = "[0-9][0-9][0-9][0-9]-[0-9][0-9]-"))) %>%
+  filter(!is.na(SampleID)) %>%
+  mutate(`Training Bounds` = case_when(SVML_Prediction > min(spectra_training_data$Moisture_Uptake) & 
+                                   SVML_Prediction < max(spectra_training_data$Moisture_Uptake) ~ "In",
+                                 SVML_Prediction < min(spectra_training_data$Moisture_Uptake) | 
+                                   SVML_Prediction > max(spectra_training_data$Moisture_Uptake) ~ "Out"))
+
+extrap_data %>%
+  #ggplot(aes(x = day, fill = `Training Bounds`))+
+  ggplot(aes(x = day, fill = as.factor(`Training Bounds`)))+
+  geom_bar(stat = "count")+
+  facet_wrap(year~month)+
+  theme_classic()
+```
+
+```{r}
+extrap_data %>%
+  ggplot(aes(x = Rep, y = `Training Bounds`, color = `Training Bounds`))+
+  geom_jitter()+
+  facet_wrap(~Env)
+  theme_classic()
+```
+
+```{r proportion of outliers that are umn17}
+extrap_data %>%
+  group_by(`Training Bounds`, Env) %>%
+  summarise(n = n()) %>%
+  mutate(total_inout = sum(n),
+         prop_inout = n/total_inout) %>%
+  ungroup() %>%
+  group_by(Env) %>%
+  mutate(total_env = sum(n),
+         prop_env = n / total_env)
+```
+
+
+
+```{r}
+macro_training_data
+macro_trait_validation_data
+macro_lm <- train(Moisture_Uptake ~ ., 
+                      data = macro_training_data %>%
+                        select_if(is.numeric), 
+                      method = "lm", 
+                      metric = "Rsquared", 
+                      tuneGrid = expand.grid(intercept = 0.2),
+                      trControl = trainControl(method = "cv",
+                                               index = groupKFold(macro_training_data$Genotype, k = 10), 
+                                               savePredictions = T, 
+                                               allowParallel = T
+                                               )
+                      )  
+
+macro_svmr <- train(Moisture_Uptake ~ ., 
+                        data = macro_training_data %>%
+                          select_if(is.numeric), 
+                        method = "svmRadial", 
+                        metric = "Rsquared",
+                        tuneGrid = expand.grid(C = 3, sigma = c(0.001, 0.01, 0.1)),
+                        trControl = trainControl(method = "cv",
+                                                 #index = groupKFold(macro_training_data$Genotype, k = 10), 
+                                                 savePredictions = T, 
+                                                 allowParallel = T
+                                                 )
+                        )
+
+pred_lm <- predict(macro_lm, macro_trait_validation_data)
+pred_svmr <- predict(macro_svmr, macro_trait_validation_data)
+
+macro_trait_validation_data %>%
+  mutate(prediction = pred_lm) %>%
+  filter(prediction > min(macro_training_data$Moisture_Uptake) & prediction < max(macro_training_data$Moisture_Uptake)) %$%
+  cor(Moisture_Uptake, prediction, method = "spearman")
+
+macro_trait_validation_data %>%
+  mutate(prediction = pred_svmr) %>%
+  filter(prediction > min(macro_training_data$Moisture_Uptake) & prediction < max(macro_training_data$Moisture_Uptake)) %$%
+  cor(Moisture_Uptake, prediction, method = "spearman")
+```
+
+```{r}
+spectra_training_data
+spectra_validation_data
+norm_training_data
+norm_validation_data
+
+spectra_svml <- train(Moisture_Uptake ~ ., 
+                      data = norm_training_data %>%
+                        select_if(is.numeric), 
+                      method = "svmLinear", 
+                      metric = "Rsquared", 
+                      tuneGrid = expand.grid(C = 71.407),
+                      trControl = trainControl(method = "cv",
+                                               index = groupKFold(norm_training_data$Genotype, k = 10), 
+                                               savePredictions = T, 
+                                               allowParallel = T
+                                               )
+                      )  
+
+spectra_pls <- train(Moisture_Uptake ~ ., 
+                        data = spectra_training_data %>%
+                          select_if(is.numeric), 
+                        method = "pls", 
+                        metric = "Rsquared",
+                        tuneGrid = expand.grid(ncomp = 16),
+                        trControl = trainControl(method = "cv",
+                                                 #index = groupKFold(spectra_training_data$Genotype, k = 10), 
+                                                 savePredictions = T, 
+                                                 allowParallel = T
+                                                 )
+                        )
+
+pred_svml <- predict(spectra_svml, norm_validation_data)
+pred_pls <- predict(spectra_pls, spectra_validation_data)
+
+norm_validation_data %>%
+  mutate(prediction = pred_svml) %>%
+  filter(prediction > min(norm_training_data$Moisture_Uptake) & prediction < max(norm_training_data$Moisture_Uptake)) %$%
+  cor(Moisture_Uptake, prediction, method = "spearman")
+
+spectra_validation_data %>%
+  mutate(prediction = pred_pls) %>%
+  filter(prediction > min(spectra_training_data$Moisture_Uptake) & prediction < max(spectra_training_data$Moisture_Uptake)) %$%
+  cor(Moisture_Uptake, prediction, method = "spearman")
+```
+
+```{r}
+n500_pca_data %>%
+  rename(Sample_ID = ID) %>%
+  full_join(sp15_spectra_dataframe) %>%
+  select(Sample_ID, Selected, Genotype) %>%
+  filter(Selected == "Y") %>%
+  select(Sample_ID, Genotype) %>%
+  mutate(Genotype = str_remove_all(string = Genotype, pattern = "-"),
+         Genotype = str_remove_all(string = Genotype, pattern = " "),
+         Genotype = str_remove_all(string = Genotype, pattern = "_"),
+         Genotype = str_remove_all(string = Genotype, pattern = "\\.0"),
+         Genotype = toupper(Genotype)) %>%
+  rename(SampleID = Sample_ID) %>%
+  full_join(hetgrps2) %>%
+  filter(!is.na(SampleID)) %>%
+  group_by(heterotic_group_consensus) %>% 
+  summarise(n = n())
+```
+
