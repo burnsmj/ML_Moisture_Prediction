@@ -1,0 +1,114 @@
+---
+title: "Digital Cleaning of N5000 Dataset"
+author: "Michael Burns"
+date: "5/7/2020"
+output: html_document
+---
+
+```{r loading_data}
+N5000_dataset_raw <- read_csv("../Data/Spectra_Data/15000_corn_hirsch.csv")
+ID_Decoder <- read_csv("../Data/YC_ID_Decoder.csv") %>%
+  select(-c(Entry, Source)) %>%
+  rename(SampleID = Plot)
+head(N5000_dataset_raw)
+dim(N5000_dataset_raw)
+```
+
+```{r cleaning_data}
+N5000_dataset_clean <- N5000_dataset_raw %>%
+  filter(!is.na(SampleID)) %>%
+  filter(!str_detect(string = SampleID, pattern = "T")) %>%
+  mutate(rownum = row_number()) %>%
+  arrange(SampleID) %>%
+  mutate(SampleID = toupper(SampleID),
+         SampleID = str_remove_all(string = SampleID, pattern = "`"),
+         SampleID = str_remove_all(string = SampleID, pattern = "~"),
+         SampleID = str_remove_all(string = SampleID, pattern = "^[0-9]+")) %>%
+  filter(SampleID != "") %>%
+  filter(str_detect(string = SampleID, pattern = "^Y")) %>%
+  mutate(SampleID = str_remove(string = SampleID, pattern = "_RESCAN")) %>%
+  filter(!str_length(string = SampleID) == 8) %>%
+  mutate(SampleID = str_extract(string = SampleID, pattern = "YC[0-9][0-9]:[0-9][0-9][0-9][0-9]")) %>%
+  arrange(desc(rownum)) %>%
+  distinct(SampleID, .keep_all = T) %>%
+  arrange(SampleID) %>%
+  select(-rownum) %>%
+  full_join(ID_Decoder) %>%
+  mutate(Location = case_when(str_detect(string = SampleID, pattern = "YC16:") & Location == "UMN" ~ 1,
+                         str_detect(string = SampleID, pattern = "YC16:") & Location == "ISU" ~ 2,
+                         str_detect(string = SampleID, pattern = "YC17:") & Location == "UMN" ~ 3,
+                         str_detect(string = SampleID, pattern = "YC17:") & Location == "ISU" ~ 4,
+                         str_detect(string = SampleID, pattern = "YC17:") & Location == "MU" ~ 5)) %>%
+  rename(Env = Location) %>%
+  arrange(SampleID) %>%
+  group_by(Genotype, Block, Env) %>%
+  mutate(Rep = case_when(str_detect(string = SampleID, pattern = ":1") ~ 1,
+                         str_detect(string = SampleID, pattern = ":3") ~ 1,
+                         str_detect(string = SampleID, pattern = ":5") ~ 1,
+                         str_detect(string = SampleID, pattern = ":2") ~ 2,
+                         str_detect(string = SampleID, pattern = ":4") ~ 2,
+                         str_detect(string = SampleID, pattern = ":6") ~ 2)) %>%
+  filter(!is.na(`950`)) %>%
+  ungroup() %>%
+  select(SampleID, Genotype, Block, Rep, Env, c(2:142))
+```
+
+```{r writing_csv}
+write_csv(N5000_dataset_clean, path = "../Data/N5000_Spectra_Cleaned_Master.csv") # This is the set without spectral outliers removed.
+```
+
+```{r reading_macro_data}
+N5000_macro_dataset_clean <- read_xlsx("../../EMS/NIR_Data_Cleaning/Data/Global_Equations_Modified.xlsx") %>%
+  rename(SampleID = ID) %>%
+  filter(!is.na(SampleID)) %>%
+  filter(!str_detect(string = SampleID, pattern = "T")) %>%
+  mutate(rownum = row_number()) %>%
+  arrange(SampleID) %>%
+  mutate(SampleID = toupper(SampleID),
+         SampleID = str_remove_all(string = SampleID, pattern = "`"),
+         SampleID = str_remove_all(string = SampleID, pattern = "~"),
+         SampleID = str_remove_all(string = SampleID, pattern = "^[0-9]+")) %>%
+  filter(SampleID != "") %>%
+  filter(str_detect(string = SampleID, pattern = "^Y")) %>%
+  mutate(SampleID = str_remove(string = SampleID, pattern = "_RESCAN")) %>%
+  filter(!str_length(string = SampleID) == 8) %>%
+  mutate(SampleID = str_extract(string = SampleID, pattern = "YC[0-9][0-9]:[0-9][0-9][0-9][0-9]")) %>%
+  arrange(desc(rownum)) %>%
+  distinct(SampleID, .keep_all = T) %>%
+  arrange(SampleID) %>%
+  select(-rownum) %>%
+  select(SampleID, 
+         Protein_As_is = `Protein As is`,
+         Fat_As_is = `Fat As is`,
+         Fiber_As_is = `Fiber As is`,
+         Ash_As_is = `Ash As is`,
+         Starch_As_is = `Starch As is`)  %>%
+  full_join(ID_Decoder) %>%
+  mutate(Location = case_when(str_detect(string = SampleID, pattern = "YC16:") & Location == "UMN" ~ 1,
+                         str_detect(string = SampleID, pattern = "YC16:") & Location == "ISU" ~ 2,
+                         str_detect(string = SampleID, pattern = "YC17:") & Location == "UMN" ~ 3,
+                         str_detect(string = SampleID, pattern = "YC17:") & Location == "ISU" ~ 4,
+                         str_detect(string = SampleID, pattern = "YC17:") & Location == "MU" ~ 5)) %>%
+  rename(Env = Location) %>%
+  arrange(SampleID) %>%
+  group_by(Genotype, Block, Env) %>%
+  mutate(Rep = case_when(str_detect(string = SampleID, pattern = ":1") ~ 1,
+                         str_detect(string = SampleID, pattern = ":3") ~ 1,
+                         str_detect(string = SampleID, pattern = ":5") ~ 1,
+                         str_detect(string = SampleID, pattern = ":2") ~ 2,
+                         str_detect(string = SampleID, pattern = ":4") ~ 2,
+                         str_detect(string = SampleID, pattern = ":6") ~ 2)) %>%
+  filter(!is.na(Protein_As_is)) %>%
+  ungroup() %>%
+  select(SampleID, Genotype, Block, Rep, Env, c(2:6))
+
+N5000_macro_dataset_clean %>%
+  write_csv(path = "../Data/N5000_Macro_Cleaned_Master.csv")
+```
+
+```{r}
+N5000_macro_dataset_clean %>%
+  full_join(N5000_dataset_clean) %>%
+  write_csv("../Data/N5000_Master_Dataset.csv")
+```
+

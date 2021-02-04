@@ -1,0 +1,63 @@
+---
+title: "Cleaning_Training_Set"
+author: "Michael Burns"
+date: "12/13/2020"
+output: html_document
+---
+
+The purpose of this markdown file is to clean the original cooking dataset that Mark created.
+
+```{r libraries}
+library(tidyverse)
+```
+
+```{r loading data}
+raw_data <- read_csv("../Data/Raw_Data/cleaned_data_v2.csv")
+```
+
+```{r removing useless columns}
+columns_removed <- raw_data %>%
+  select(-c(X1, X, Month, Day, Year, Sample.ID, Temp.Data.File, Notes, Notes.1, Notes.2, Notes.3, Notes.4, Moisture.Avg)) %>% # Removed moisture average so I can calculate it myself to not get NA's when only one value is missing
+  rename(Sample_ID = YC,
+         Genotype = Geno)
+```
+
+```{r removing NAs}
+correct_moisture <- columns_removed %>%
+  filter(!is.na(Y.Kernel.Moisture) && !is.na(Z.Kernel.Moisture)) %>%
+  mutate(row = row_number()) %>%
+  pivot_longer(cols = c(Y.Kernel.Moisture, Z.Kernel.Moisture), names_to = "replication", values_to = "moisture") %>%
+  group_by(row) %>%
+  mutate(Moisture_Uptake = mean(moisture, na.rm = T)) %>%
+  pivot_wider(id_cols = -c(replication, moisture), names_from = "replication", values_from = "moisture")
+```
+
+```{r loading spectra and macro data}
+n5000_data <- read_csv("../Data/N5000_Master_Dataset.csv") %>%
+  select(SampleID) %>%
+  unique() %>%
+  pull()
+```
+
+```{r matching cooked samples to scanned samples}
+matched_samples <- correct_moisture %>%
+  filter(Sample_ID %in% n5000_data)
+```
+
+```{r writing out dataset}
+matched_samples %>%
+  write_csv("../Data/Manuscript_Data/Raw_Cooking_Data.csv")
+```
+
+
+```{r averaging moisture per sample}
+missing_removed <- matched_samples %>%
+  group_by(Sample_ID) %>%
+  mutate(number = n(),
+         na_count = sum(is.na(Y.Kernel.Moisture), is.na(Z.Kernel.Moisture))) %>%
+  filter(na_count <= 3) %>%
+  summarise(Avg_Moisture_Uptake = mean(Moisture_Uptake, na.rm = T))
+```
+
+
+
