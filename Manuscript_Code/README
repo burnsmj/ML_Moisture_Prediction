@@ -1,1 +1,50 @@
-For now this is just to create the manuscript code folder, more will be input to describe the structure of the directory and the contents.
+Moisture Uptake Prediction Code Directory
+Michael Burns
+
+Note: It is entirely possible that some code will not work due to changes in datasets to make them publishable.  If code does not work please email me at burns756@umn.edu with the script name and error so I know what to change.
+
+Data
+  Digital_Cleaning_Initial_N500_Dataset.Rmd
+    An R markdown file to automatically clean through the dataset of 500 genotypes to remove missing and erroneous datapoints.
+  Digital_Creation_of_Mastersheet.Rmd
+    An R markdown file to combine the spectra and macromolecular profiles of the 316 training samples.
+  Digitally_Cleaning_Training_Set.Rmd
+    An R markdown file to automatically clean the n=400 dataset of missing or erroneous datapoints.
+  ML_Master_Validation_Dataset.Rmd
+    An R markdown file to combine the spectra and macromolecular profiles of the 47 chosen validation samples.
+  digital_cleaning_n5000.Rmd
+    An R markdown to automatically clean through the n=5000 dataset to remove missing or erroneous datapoints.
+
+Data_Analysis
+  Moisture_Uptake_Prediction_Paper_Figures.Rmd
+    An R markdown file containing the majority of the data analysis performed during the creation of the manuscript.
+  Mup_Data_Analysis
+    An R markdown file that analyzes the variation explained in moisture uptake by spectra, macromolecular composition, and cooking parameters.
+  Non-Parallel_LC.R
+    An R script run on an HPC to collect data for the learning curve of the best macromolecular and spectra model.  This was run in a non-parallel way to ensure the learning_curve_dat function would work properly.
+
+GWAS_Code
+  GAPIT_for_MSI.R
+    R script to get the PCA data.
+  Moisture_Uptake_FarmCPU.R
+    R script to run FarmCPU analysis.
+  Numerical_GAPIT.R
+    R script to convert genomic data to numerical format
+  Splitting_BLUPs_by_Env.R
+    R script for splittling the BLUP data (and trait data) into datasets for each environment. This is needed as not all genotypes had data in all environments.
+  p_value_GAPIT.R
+    R script for determining the best p value threshold for FarmCPU.
+
+Machine_Learning
+  MSI_Macro_ML.R
+    R script for bootstrapping macromolecular models across a number of hyperparameters, partitions, and cross validation methods.
+  MSI_Spectra_ML_NoBound_GenoSplit_GenoCV.R
+    R script for bootstrapping spectra models across a number of hyperparameters and normalizations within the genotype based partitioning and cross validation.
+  MSI_Spectra_ML_NoBound_RandomSplit_RandomCV.R
+    R script for bootstrapping spectra models across a number of hyperparameters and normalizations within the random partitioning and cross validation.
+
+Moisture_Uptake_Prediction
+  Location for the datasets and scripts that someone can download to utilize the machine learning model
+  
+  
+  
