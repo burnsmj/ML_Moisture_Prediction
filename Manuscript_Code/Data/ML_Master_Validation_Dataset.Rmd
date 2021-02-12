@@ -1,0 +1,44 @@
+---
+title: "Validation_Set_File_Creation"
+author: "Michael Burns"
+date: "8/10/2020"
+output: html_document
+---
+
+The purpose of this markdown file is to combine the cook test data with macro and spectral data to create a clean master file of the test dataset.
+
+```{r loading_data}
+# Cook test Data
+cook_data <- read_xlsx("../Data/ML_Validation_Cook_Tests_MBurns.xlsx") %>%
+  filter(!str_detect(string = SampleID, pattern = "Test")) %>%
+  filter(SampleID != "YC16:4106" & SampleID != "YC16:3380" & SampleID != "YC16:3408") %>% # Removing replaced samples
+  filter(!is.na(`Start.Weight(g)`)) %>% 
+  mutate(Notes = case_when(is.na(Notes) ~ "blank",
+                           !is.na(Notes) ~ Notes)) %>%
+  filter(Notes != "Forgot Stirbars...") %>%
+  group_by(SampleID, Genotype) %>%
+  select(SampleID, Genotype, Moisture.Avg) %>%
+  summarise(Moisture_Uptake = mean(as.numeric(Moisture.Avg))) %>%
+  mutate(Genotype = str_remove_all(string = Genotype, pattern = " "))
+```
+
+```{r loading_macro_and_spectra_traits}
+macro_data <- read_csv("../Data/N5000_Macro_Cleaned_Master.csv") %>%
+  filter(SampleID %in% cook_data$SampleID)
+
+spectra_data <- read_csv("../Data/N5000_Spectra_Cleaned_Master.csv") %>%
+  filter(SampleID %in% cook_data$SampleID)
+```
+
+
+```{r joining_data}
+full_data <- cook_data %>%
+  full_join(macro_data) %>%
+  full_join(spectra_data)
+```
+
+```{r writing_dataset}
+write_csv(full_data, "../Data/ML_Master_Validation_Dataset.csv")
+```
+
+
