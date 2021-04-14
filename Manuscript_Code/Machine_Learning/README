@@ -1,0 +1,16 @@
+MSI_Macro_ML.R
+  - A script using macromolecular data to predict moisture uptake; 7 models bootstrapped 100 times
+  - Requires Moisture_Uptake_Master_Dataset_Cook_Macro_Spectra.csv
+  - Produces macro_randomsplit_randomcv_nobound_clean.csv, macro_randomsplit_randomcv_nobound_raw.csv, macro_genosplit_genocv_nobound_clean.csv, and macro_genosplit_genocv_nobound_raw.csv
+
+MSI_Spectra_ML_NoBound_GenoSplit_GenoCV.R
+  - A script using spectral data to predict moisture uptake; 7 models bootstrapped 100 times, only split by genotype for partitioning and CV
+  - Requires Moisture_Uptake_Master_Dataset_Cook_Macro_Spectra.csv
+  - Produces spectra_genosplit_genocv_nobound_clean_X.csv, spectra_genosplit_genocv_nobound_raw_X.csv
+
+MSI_Spectra_ML_NoBound_RandomSplit_RandomCV.R
+  - A script using spectral data to predict moisture uptake; 7 models bootstrapped 100 times, only split randomly for partitioning and CV
+  - Requires Moisture_Uptake_Master_Dataset_Cook_Macro_Spectra.csv
+  - Produces spectra_randomsplit_randomcv_nobound_clean_X.csv, spectra_randomsplit_randomcv_nobound_raw_X.csv
+  
+  In the scripts above, an X in the file name indicates a number (1-20) which was used to make the bootstrapping process faster.
