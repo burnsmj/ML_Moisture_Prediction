@@ -1,1 +1,16 @@
-Temp
+Digital_Creation_of_Mastersheet.Rmd
+  - Creates the training dataset (N400) containing both spectra and macromolecular data
+  - Requires YC_data_w_moisture_uptake.xlsx
+  - Produces Moisture_Uptake_Master_Dataset_Cook_Macro_Spectra.csv
+  
+ML_Master_Validation_Dataset.Rmd 
+  - Cleaning of the validation cooking dataset (N47)
+  - Requires ML_Validation_Cook_tests_MBurns.xlsx, N5000_Macro_Cleaned_Master.csv, and N5000 _Spectra_Cleaned_Master.csv
+  - Produces ML_Master_Validation_Dataset.csv
+  
+digital_cleaning_n5000.Rmd
+  - Cleans the full dataset (N5000) in terms of macro and spectral traits.  
+  - Requires 15000_corn_hirsch.csv, YC_ID_Decoder.csv, Global_Equations_Modified.xlsx, Moisture_Uptake_Master_Dataset_Cook_Macro_Spectra.csv
+  - Produces N5000_Spectra_Cleaned_Master.csv, N5000_Macro_Cleaned_Master.csv, and N5000_Master_Dataset.csv
+  - This code must be run after the Digital_Creation_of_Mastersheet.Rmd as it requires the output to finish cleaning the dataset
+  
