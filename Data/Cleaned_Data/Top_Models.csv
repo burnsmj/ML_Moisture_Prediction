@@ -1,0 +1,13 @@
+Model,Partition,dataset,CV,Bounds,Metric,Data,Intercept,Mtry,Ncomp,C,Performance,n,Split,K,CP,Degree,Scale,Sigma
+SVML,Genotype,abs,Genotype,No,Spearman_R,Spectra,NA,NA,NA,71.407,0.7266198359234505,99,NA,NA,NA,NA,NA,NA
+PLS,Genotype,base,Genotype,No,Spearman_R,Spectra,NA,NA,16,NA,0.7264413220524628,100,NA,NA,NA,NA,NA,NA
+SVML,Genotype,abs,Genotype,No,Spearman_R,Spectra,NA,NA,NA,86.247,0.7264300384607526,1,NA,NA,NA,NA,NA,NA
+PCR,Genotype,abs,Genotype,No,Spearman_R,Spectra,NA,NA,28,NA,0.72292327755033,100,NA,NA,NA,NA,NA,NA
+SVMP,Genotype,abs,Genotype,No,Spearman_R,Spectra,NA,NA,NA,139.167,0.7119738182392699,99,NA,NA,NA,NA,NA,NA
+SVMP,Genotype,abs,Genotype,No,Spearman_R,Spectra,NA,NA,NA,137.20000000000002,0.7107278233268103,1,NA,NA,NA,NA,NA,NA
+SVMR,Genotype,sq,Genotype,No,Spearman_R,Spectra,NA,NA,NA,10.647,0.6038005425987529,100,NA,NA,NA,NA,NA,NA
+RF,Genotype,base,Genotype,No,Spearman_R,Spectra,NA,129,NA,NA,0.5829905839378773,99,NA,NA,NA,NA,NA,NA
+RF,Genotype,base,Genotype,No,Spearman_R,Spectra,NA,124,NA,NA,0.5827469542411492,1,NA,NA,NA,NA,NA,NA
+LM,Genotype,abs,Genotype,No,Spearman_R,Spectra,0.2907801418439716,NA,NA,NA,0.5566136200184615,34,NA,NA,NA,NA,NA,NA
+LM,Genotype,abs,Genotype,No,Spearman_R,Spectra,0.5957446808510638,NA,NA,NA,0.5566136200184615,33,NA,NA,NA,NA,NA,NA
+LM,Genotype,abs,Genotype,No,Spearman_R,Spectra,1,NA,NA,NA,0.5566136200184615,33,NA,NA,NA,NA,NA,NA
