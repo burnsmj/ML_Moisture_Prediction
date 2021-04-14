@@ -14,3 +14,8 @@ digital_cleaning_n5000.Rmd
   - Produces N5000_Spectra_Cleaned_Master.csv, N5000_Macro_Cleaned_Master.csv, and N5000_Master_Dataset.csv
   - This code must be run after the Digital_Creation_of_Mastersheet.Rmd as it requires the output to finish cleaning the dataset
   
+Digitally_Cleaning_Training_Set.Rmd
+  - This will clean the original cooking dataset (N800)
+  - Requires cleaned_data_v2.csv, N5000_Master_Dataset.csv
+  - Produces Raw_Cooking_Data.csv
+  - This was only used to digitally create a table for the manuscript. For cleaning the training set, please use Digital_Creation_of_Mastersheet.Rmd
