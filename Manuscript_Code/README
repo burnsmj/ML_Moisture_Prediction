@@ -2,59 +2,60 @@ Moisture Uptake Prediction Code Directory
 Michael Burns
 ---
 Note: It is entirely possible that some code will not work due to changes in datasets to make them publishable.  If code does not work please email me at burns756@umn.edu with the script name and error so I know what to change.
+Note: Each directory has a README describing the information in greater detail.  Please refer to this for more information on each script.
+Note: This README should be used to direct you to other subdirectories and inform you about the general pipeline that was used.
 ---
 Directories: 
-  Data Cleaning
-    Digital_Cleaning_Initial_N500_Dataset.Rmd
-      An R markdown file to automatically clean through the dataset of 500 genotypes to remove missing and erroneous datapoints.
-    Digital_Creation_of_Mastersheet.Rmd
-      An R markdown file to combine the spectra and macromolecular profiles of the 316 training samples.
-    Digitally_Cleaning_Training_Set.Rmd
-      An R markdown file to automatically clean the n=400 dataset of missing or erroneous datapoints.
-    ML_Master_Validation_Dataset.Rmd
-      An R markdown file to combine the spectra and macromolecular profiles of the 47 chosen validation samples.
-    digital_cleaning_n5000.Rmd
-      An R markdown to automatically clean through the n=5000 dataset to remove missing or erroneous datapoints.
+  - Data Cleaning
+    - Digital_Creation_of_Mastersheet.Rmd
+    - Digitally_Cleaning_Training_Set.Rmd
+    - ML_Master_Validation_Dataset.Rmd
+    - digital_cleaning_n5000.Rmd
+    - README
 
-  Data_Analysis
-    Moisture_Uptake_Prediction_Paper_Figures.Rmd
-      An R markdown file containing the majority of the data analysis performed during the creation of the manuscript.
-    Mup_Data_Analysis
-      An R markdown file that analyzes the variation explained in moisture uptake by spectra, macromolecular composition, and cooking parameters.
-    Non-Parallel_LC.R
-      An R script run on an HPC to collect data for the learning curve of the best macromolecular and spectra model.  This was run in a non-parallel way to ensure the learning_curve_dat function would work properly.
+  - Data_Analysis
+    - Moisture_Uptake_Prediction_Paper_Figures.Rmd
+    - README
 
-  GWAS_Code
-    GAPIT_for_MSI.R
-      R script to get the PCA data.
-    Moisture_Uptake_FarmCPU.R
-      R script to run FarmCPU analysis.
-    Numerical_GAPIT.R
-      R script to convert genomic data to numerical format
-    Splitting_BLUPs_by_Env.R
-      R script for splittling the BLUP data (and trait data) into datasets for each environment. This is needed as not all genotypes had data in all environments.
-    p_value_GAPIT.R
-      R script for determining the best p value threshold for FarmCPU.
+  - GWAS_Code
+    - Moisture_Uptake_FarmCPU.R
+    - Numerical_GAPIT.R
+    - Splitting_BLUPs_by_Env.R
+    - p_value_GAPIT.R
+    - GWAS_QC.sh
+    - GWAS_Env_Splitter.pl
+    - README
 
-  Machine_Learning
-    MSI_Macro_ML.R
-      R script for bootstrapping macromolecular models across a number of hyperparameters, partitions, and cross validation methods.
-    MSI_Spectra_ML_NoBound_GenoSplit_GenoCV.R
-      R script for bootstrapping spectra models across a number of hyperparameters and normalizations within the genotype based partitioning and cross validation.
-    MSI_Spectra_ML_NoBound_RandomSplit_RandomCV.R
-      R script for bootstrapping spectra models across a number of hyperparameters and normalizations within the random partitioning and cross validation.
+  - Machine_Learning
+    - MSI_Macro_ML.R
+    - MSI_Spectra_ML_NoBound_GenoSplit_GenoCV.R
+    - MSI_Spectra_ML_NoBound_RandomSplit_RandomCV.R
+    - Non-Parallel_LC.R
+    - README
 
-  Moisture_Uptake_Prediction
-    Location for the datasets and scripts that someone can download to utilize the machine learning model
+  - Moisture_Uptake_Prediction
+    - Moisture_Uptake_Predictor.R
+    - README
 ---  
 Pipeline:
   Data Preparation:
-    Raw data can be found in the data folder one directory level above the current one.
-    There were three primary raw datasets.  
-      N500 dataset (grown in 2014 and 2015 to determine spectral variance)
-      N5000 dataset (grown in 2016 and 2017 to be used as either training or validation data)
-      N800 dataset (a subset of the N5000 dataset that had been cooked in the scaled down bench top cook test.  Samples were cook in replicate, so there were 400 unique plots in this dataset)
-    The N500 dataset had previously been cleaned, and was only utilized in the Moisture_Uptake_Prediction_Paper_Figures.Rmd file to plot the first two principle components and show the selected training samples (those which will populate the N800 dataset)
-    The N5000 dataset was cleaned using the digital_cleaning_n5000.Rmd file.  This was done to remove samples that did not have a sample ID, had an indiscernable sample ID, or had missing data anywhere.  A filtering step using the thresholds of the training dataset was later used, so it is recommended to run this after creating the fully cleaned training set.
-    The N800 dataset was cleaned using the 
+    - Digital_Creation_of_Mastersheet.Rmd
+    - digital_cleaning_n5000.Rmd
+    - ML_Master_Validation_Dataset.Rmd
+    - Digitally_Cleaning_Training_Set.Rmd (solely for the purpose of making a table for the manuscript)
+  Machine Learning:
+    - MSI_Macro_ML.R
+    - MSI_Spectra_ML_NoBound_RandomSplit_RandomCV.R
+    - MSI_Spectra_ML_NoBound_GenoSplit_GenoCV.R
+    - Non-Parallel_LC.R
+  GWAS:
+    - Numerical_GAPIT.R
+    - Splitting_BLUPs_by_Env.R
+    - GWAS_QC.sh
+    - GWAS_Env_Splitter.pl
+    - p_value_GAPIT.R
+    - Moisture_Uptake_FarmCPU.R
+  Data Analysis:
+    - Moisture_Uptake_Prediction_Paper_Figures.Rmd (Aspects of this script were created and used throughout the pipeline to inform decisions, but as it is set up, it can run after the pipeline entirely)
+    
   
