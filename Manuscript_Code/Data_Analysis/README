@@ -1,0 +1,4 @@
+Moisture_Uptake_Prediction_Paper_Figures.Rmd
+  - All data analysis and figures produced for paper
+  - Requires most output files from scripts listed in other folders
+  - Produces cleaned datasets, figures, and tables for the manuscript
