@@ -1,0 +1,11 @@
+Raw_Data
+  - A directory of the raw data collected during the experiment.  
+  - These data will be used by the scripts to create models, and cleaner data
+
+Cleaned_Data
+  - A directory of the cleaned data created during the pipeline
+
+Supplemental_Table_Data
+  - A directory of the data used to create the supplemental tables in the manuscript
+  
+Note: HapMap data is not included in this directory due to its size. Please see O’Connor et al. 2020 for the hapmap data used.
