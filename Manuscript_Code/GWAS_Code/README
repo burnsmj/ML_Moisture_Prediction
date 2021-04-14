@@ -1,0 +1,39 @@
+Moisture_Uptake_FarmCPU.R
+  - Runs FarmCPU to perform a GWAS on the genetic and predicted moisture uptake data.
+  - Requires My_Y_Env_X.csv, GD_Env_X.txt, GAPIT.Genotype.map.txt, GAPIT.PCA.csv, and FarmCPU.p.threshold.optimize.moisture_uptake_X.txt
+  - Produces Manhattan Plot, SNP significance dataset, etc.
+
+Numerical_GAPIT.R
+  - Runs GAPIT to get the numeric genomic dataset, genomic map dataset, and the PCA of the genotypes.
+  - Requires christine_common_final.hmp.txt
+  - Produces GAPIT.Genotype.Numerical.txt, GAPIT.Genotype.map.txt, and GAPIT.PCA.csv
+
+Splitting_BLUPs_by_Env.R
+  - The purpose of this script is to split BLUP data by environment
+  - Requires N5000_Prediction_Dataset_Matched_2_SNPs.csv and christine_common_final.hmp.txt
+  - Produces MyY_Env_X.csv
+  - This will not produce a dataset of the SNPs in each environment, see the perl script GWAS_Env_Splitter.pl for this
+  
+p_value_GAPIT.R
+  - Produces the permuted p-value dataset which is used to determine SNP significance
+  - Requires My_Y_Env_X.csv, GD_Env_X.csv, and GAPIT.Genotype.map.txt
+  - Produces FarmCPU.p.threshold.optimize.moisture_uptake_X.txt
+  
+GWAS_Env_Splitter.pl
+  - This script goes through the numeric dataset line by line and determines if the genotype is present in a given environment.  If it is, it adds it to the list of genotypes and SNPs for that given environment.
+  - Requires MyY_Taxa_Env_X.txt and GAPIT.Genotype.Numerical.txt
+  - Produces GD_Env_X.txt
+  
+GWAS_QC.sh
+  - A file to run QC on the SNP datasets (includes checking the number of lines in common, the number of taxa in each, etc)
+  - Requires MyY_Env_X.csv and GD_Env_X.txt
+  - Produces MyY_Taxa_Env_X.txt (other files are created, but not important).
+  
+In All of the above scripts, an X in the name of a file indicates a value of 1-5.
+
+These scripts should be run in the following order:
+1. Numerical_GAPIT.R
+2. Splitting_BLUPs_by_Env.R
+3. GWAS_Env-Splitter.pl
+4. p_value_GAPIT.R
+5. Moisutre_Uptake_FarmCPU.R
