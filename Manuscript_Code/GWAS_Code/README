@@ -10,7 +10,7 @@ Numerical_GAPIT.R
 
 Splitting_BLUPs_by_Env.R
   - The purpose of this script is to split BLUP data by environment
-  - Requires N5000_Prediction_Dataset_Matched_2_SNPs.csv and christine_common_final.hmp.txt
+  - Requires N5000_Master_With_Predictions.csv and christine_common_final.hmp.txt
   - Produces MyY_Env_X.csv
   - This will not produce a dataset of the SNPs in each environment, see the perl script GWAS_Env_Splitter.pl for this
   
