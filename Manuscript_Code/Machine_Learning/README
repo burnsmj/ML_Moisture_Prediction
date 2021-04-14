@@ -13,4 +13,9 @@ MSI_Spectra_ML_NoBound_RandomSplit_RandomCV.R
   - Requires Moisture_Uptake_Master_Dataset_Cook_Macro_Spectra.csv
   - Produces spectra_randomsplit_randomcv_nobound_clean_X.csv, spectra_randomsplit_randomcv_nobound_raw_X.csv
   
-  In the scripts above, an X in the file name indicates a number (1-20) which was used to make the bootstrapping process faster.
+Non_Parallel_LC.R
+  - A non-parallelized script to create learning curve data for the top spectral and macromolecular machine learning models
+  - Requires Moisture_Uptake_Master_Dataset_Cook_Macro_Spectra.csv
+  - Produces LC_MSI_Spectra_Reps_NP.csv
+  
+In the scripts above, an X in the file name indicates a number (1-20) which was used to make the bootstrapping process faster.
