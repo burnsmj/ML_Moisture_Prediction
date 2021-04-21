@@ -11,12 +11,26 @@ Contents:
     - A file saved with original validation set predictions to compare current predictions to inorder to ensure the model hasn't changed
 
 ----------
+
+Data format:
+- The script will normalize the data after reading it in
+- The first column of the data should be "Sample_ID"
+- There should be 141 columns in addition to "Sample_ID" that are waveband absorbances from 950nm to 1650nm, in increments of 5nm.
+
+----------
     
 Instructions:
-- Clone the github folder to a preferred location on your computer
-- From the command line, enter into the folder Manuscript_Code/Moisture_Uptake_Prediction/
-- Run the R script Moisture_Uptake_Prediction_Model.R using: Rscript Moisture_Uptake_Prediction_Model.R
-  - This script will source the setup script.
-- 
-  - It will take about a minute for the setup script to run, but once it has, it will not need to again until a new R environment is created.
+- Clone the github folder to a preferred location on your computer.
+- Open the file Moisture_Uptake_Prediction_Model.R in RStudio.
+  - It can be found in the Manuscript_Code/Moisture_Uptake_Prediction/ directory.
+- In the top right corner of the script window of RStudio, press the "source" button.
+- In the console window of RStudio, type: Moisture_Uptake_Prediction().
+  - This will source the setup file.
+  - The first time running in a new R environment will take about a minute as it needs to train the model.
+    - This will happen each time if R is closed in between uses.
+- There will be a prompt in the console window of R studio asking for an input file path, write out the file path to the data you want to create predictions on.
+  - It is usually easiest to enclose your file path in double quotes so R will help you autocomplete your file paths.
+- There will be a prompt in the console window of R studio asking for an output file path, write out the file path to the location and file name you want for your output dataset.
+- The function will output your original dataset with an additional column of Moisture Uptake Predicitons.
+ 
 
