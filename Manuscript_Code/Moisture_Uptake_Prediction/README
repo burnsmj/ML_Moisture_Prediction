@@ -1,2 +1,22 @@
 Contents:
-  
+  ML_Master_Validation_Dataset.csv
+    - A file of scans that is needed to ensure the model is still predicting as it originally did
+  Moisture_Uptake_Master_Dataset_Cook_Macro_Spectra.csv
+    - The training dataset
+  Moisture_Uptake_Prediction_Model.R
+    - R script with the prediction model function
+  Prediction_Model_Setup.R
+    - R script to set up the local environment for the prediction model
+  Validation_Set_Predictions.csv
+    - A file saved with original validation set predictions to compare current predictions to inorder to ensure the model hasn't changed
+
+----------
+    
+Instructions:
+- Clone the github folder to a preferred location on your computer
+- From the command line, enter into the folder Manuscript_Code/Moisture_Uptake_Prediction/
+- Run the R script Moisture_Uptake_Prediction_Model.R using: Rscript Moisture_Uptake_Prediction_Model.R
+  - This script will source the setup script.
+- 
+  - It will take about a minute for the setup script to run, but once it has, it will not need to again until a new R environment is created.
+
