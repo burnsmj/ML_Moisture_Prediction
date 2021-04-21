@@ -48,3 +48,5 @@ Moisture_Uptake_Prediction <- function(){
     write_csv(new_output)
   print("Output file has be written to the desired directory")
 }
+
+Moisture_Uptake_Prediction()
