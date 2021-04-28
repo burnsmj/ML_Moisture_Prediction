@@ -34,7 +34,7 @@ In All of the above scripts, an X in the name of a file indicates a value of 1-5
 These scripts should be run in the following order:
 1. Numerical_GAPIT.R
 2. Splitting_BLUPs_by_Env.R
-3. GWAS_QC.sh
-4. GWAS_Env_Splitter.pl
+3. GWAS_Env_Splitter.pl
+4. GWAS_QC.sh (Not Required)
 5. p_value_GAPIT.R
 6. Moisutre_Uptake_FarmCPU.R
