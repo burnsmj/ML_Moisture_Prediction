@@ -31,48 +31,15 @@ source("http://zzlab.net/FarmCPU/FarmCPU_functions.txt")
 memory.limit()
 memory.limit(size = 35000) # Had to increase device memory allocation to R in order to get this loaded.
 
-###############################
-# Getting Shell Script Inputs #
-###############################
-cli_arg <- commandArgs(trailingOnly = TRUE)
-iter <- as.numeric(cli_arg[1])
+#########################
+# Set Working Directory #
+#########################
+setwd("/home/hirschc1/burns756/Machine_Learning/Data/")
 
 ################
 # Loading Data #
 ################
-#myY <- read.csv("my_Y.csv")
-myG <- read.table(paste("../Data/MyG_Env_", iter, ".hmp.txt", sep = ""), sep = "\t", header = F) #normally this file is christine_common_final.hmp.txt
-
-#######################################
-# Matching Genotypes Between Datasets #
-#######################################
-#print("Matching Genotypes")
-
-#myY_genos <- myY %>%
-#  select(taxa) %>%
-#  unique() %>%
-#  pull()
-
-#myG_Genos <- myG[1,c(12:ncol(myG))] %>%
-#  pivot_longer(cols = everything(), names_to = "Column", values_to = "Genotype") %>%
-#  filter(Genotype %in% myY_genos) %>%
-#  select(Genotype) %>%
-#  unique() %>%
-#  pull()
-
-#myG_columns <- myG[1,c(12:ncol(myG))] %>%
-#  pivot_longer(cols = everything(), names_to = "Column", values_to = "Genotype") %>%
-#  filter(Genotype %in% myY_genos) %>%
-#  select(Column) %>%
-#  unique() %>%
-#  pull()
-
-#myY <- myY %>%
-#  filter(taxa %in% myG_Genos) %>%
-#  as.data.frame()
-#myG <- myG %>%
-#  select(c(1:11, myG_columns)) %>%
-#  as.data.frame()
+myG <- read.table("christine_common_final.hmp.txt", sep = "\t", header = F) #normally this file is christine_common_final.hmp.txt
 
 ############################################################
 # Running Gapit for Conversion of HapMap to Numeric Format #
@@ -81,19 +48,10 @@ print("Starting GAPIT")
 
 myGAPIT <- GAPIT(
   G = myG,
-  output.numerical=T
+  output.numerical=T,
+  PCA.total = 5
 )
 
 print("Finished GAPIT")
-
-myGD <- myGAPIT$GD
-myGM <- myGAPIT$GM
-#myPCA <- myGAPIT$PCA
-
-print("Saved Files")
-
-#write.csv(myG, "myG.csv")
-write.csv(myGD, paste("myGD_", iter, ".csv", sep = ""))
-write.csv(myGM, paste("myGM_", iter, ".csv", sep = ""))
 
 print("El Fin")

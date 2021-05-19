@@ -5,12 +5,6 @@ library(tidyverse)
 library(lme4)
 library(magrittr)
 
-########################
-# Setting memory limit #
-########################
-memory.limit()
-memory.limit(size = 35000)
-
 #########################
 # Set Working Directory #
 #########################
@@ -19,32 +13,42 @@ memory.limit(size = 35000)
 ################
 # Loading Data #
 ################
-predictions <- read_csv("Data/Manuscript_Data/N5000_Prediction_Dataset_Matched_2_SNPs.csv") %>% # Loading N5000 dataset and keeping the prediction, genotype, env, rep, and block.
+spectra_training_data <- read_csv("Data/Moisture_Uptake_Master_Dataset_Cook_Macro_Spectra.csv") %>%
+  select(c(1,2,26)) %>%
+  mutate(Moisture_Uptake = Moisture_Uptake * 100)
+
+predictions <- read_csv("Data/SNP_Data//N5000_Prediction_Dataset.csv") %>% # Loading N5000 dataset and keeping the prediction, genotype, env, rep, and block.
   select(2:5, 152) %>%
   mutate(SVML_Prediction = SVML_Prediction * 100) %>% # Putting moisture uptake into percentage rather than proportion
   mutate(Genotype = factor(Genotype),
          Block = factor(Block),
          Rep = factor(Rep),
          Env = factor(Env))
-myG <- read.table("Data/SNP_Data/christine_common_final.hmp.txt", head = F) # loading hapmap dataset from Jonathan
+
+myG_Taxa <- read.table("Data/SNP_Data/GD_Taxa_List.txt", head = T)
 
 ############################
 # Filtering by Environment #
 ############################
 env1 <- predictions %>%
-  filter(Env == 1)
+  filter(Env == 1) %>%
+  filter(SVML_Prediction >= min(spectra_training_data$Moisture_Uptake) & SVML_Prediction <= max(spectra_training_data$Moisture_Uptake))
 
 env2 <- predictions %>%
-  filter(Env == 2)
+  filter(Env == 2) %>%
+  filter(SVML_Prediction >= min(spectra_training_data$Moisture_Uptake) & SVML_Prediction <= max(spectra_training_data$Moisture_Uptake))
 
 env3 <- predictions %>%
-  filter(Env == 3)
+  filter(Env == 3) %>%
+  filter(SVML_Prediction >= min(spectra_training_data$Moisture_Uptake) & SVML_Prediction <= max(spectra_training_data$Moisture_Uptake))
 
 env4 <- predictions %>%
-  filter(Env == 4)
+  filter(Env == 4) %>%
+  filter(SVML_Prediction >= min(spectra_training_data$Moisture_Uptake) & SVML_Prediction <= max(spectra_training_data$Moisture_Uptake))
 
 env5 <- predictions %>%
-  filter(Env == 5)
+  filter(Env == 5) %>%
+  filter(SVML_Prediction >= min(spectra_training_data$Moisture_Uptake) & SVML_Prediction <= max(spectra_training_data$Moisture_Uptake))
 
 dim(env1)
 dim(env2)
@@ -100,7 +104,7 @@ dim(Env_5_BLUPs)
 #######################################
 # List of Genotypes with Genomic Data #
 #######################################
-genotypes <- unlist(list(myG[1,c(12:ncol(myG))]))
+genotypes <- myG_Taxa$taxa
 
 #########################################
 # Matching BLUP and Genomic Information #
@@ -165,46 +169,59 @@ sum(Env_4_Y_Match$taxa == genos_4$taxa)
 dim(Env_5_Y_Match)
 sum(Env_5_Y_Match$taxa == genos_5$taxa)
 
-# Not needed since we now use the perl script
-#g1_index <- which(genotypes %in% genos_1$taxa) + 11
-#g2_index <- which(genotypes %in% genos_2$taxa) + 11
-#g3_index <- which(genotypes %in% genos_3$taxa) + 11
-#g4_index <- which(genotypes %in% genos_4$taxa) + 11
-#g5_index <- which(genotypes %in% genos_5$taxa) + 11
-
-#length(g1_index)
-#length(g2_index)
-#length(g3_index)
-#length(g4_index)
-#length(g5_index)
-
-#myG_Env_1 <- myG[,c(1:11, g1_index)]
-#myG_Env_2 <- myG[,c(1:11, g2_index)]
-#myG_Env_3 <- myG[,c(1:11, g3_index)]
-#myG_Env_4 <- myG[,c(1:11, g4_index)]
-#myG_Env_5 <- myG[,c(1:11, g5_index)]
-
-#dim(myG_Env_1) - 11
-#dim(myG_Env_2) - 11
-#dim(myG_Env_3) - 11
-#dim(myG_Env_4) - 11
-#dim(myG_Env_5) - 11
-
-#head(myG_Env_1)
-
-#########################
-# Write Out Subset Data #
-#########################
-### Genomic Data ###
-#write_delim(myG_Env_1, "Environment_1/MyG_widiv_Env_1.hmp.txt", delim = "\t", col_names = F)
-#write_delim(myG_Env_2, "Environment_2/MyG_widiv_Env_2.hmp.txt", delim = "\t", col_names = F)
-#write_delim(myG_Env_3, "Environment_3/MyG_widiv_Env_3.hmp.txt", delim = "\t", col_names = F)
-#write_delim(myG_Env_4, "Environment_4/MyG_widiv_Env_4.hmp.txt", delim = "\t", col_names = F)
-#write_delim(myG_Env_5, "Environment_5/MyG_widiv_Env_5.hmp.txt", delim = "\t", col_names = F)
-
 ### Phenotypic BLUP Data ###
 write_csv(Env_1_Y_Match,"Data/SNP_Data/MyY_Env_1.csv")
 write_csv(Env_2_Y_Match,"Data/SNP_Data/MyY_Env_2.csv")
 write_csv(Env_3_Y_Match,"Data/SNP_Data/MyY_Env_3.csv")
 write_csv(Env_4_Y_Match,"Data/SNP_Data/MyY_Env_4.csv")
 write_csv(Env_5_Y_Match,"Data/SNP_Data/MyY_Env_5.csv")
+
+
+##########
+### QC ###
+##########
+Env_1_Y_Match %>%
+  summarise(min_blups = min(BLUPs_1),
+            max_blups = max(BLUPs_1),
+            range = max_blups-min_blups)
+Env_2_Y_Match %>%
+  summarise(min_blups = min(BLUPs_2),
+            max_blups = max(BLUPs_2),
+            range = max_blups-min_blups)
+Env_3_Y_Match %>%
+  summarise(min_blups = min(BLUPs_3),
+            max_blups = max(BLUPs_3),
+            range = max_blups-min_blups)
+Env_4_Y_Match %>%
+  summarise(min_blups = min(BLUPs_4),
+            max_blups = max(BLUPs_4),
+            range = max_blups-min_blups)
+Env_5_Y_Match %>%
+  summarise(min_blups = min(BLUPs_5),
+            max_blups = max(BLUPs_5),
+            range = max_blups-min_blups)
+
+read_csv("/Users/michael/Downloads/Moisture_Prediction_Tables - Table_S1 (2).csv", skip = 1) %>%
+  select(1,8) %>%
+  rename(taxa = Genotype) %>%
+  full_join(Env_1_Y_Match) %>%
+  filter(!is.na(BLUPs_1)) %>%
+  filter(!is.na(Env1_Moisture_BLUP)) %>%
+  ggplot(aes(x = BLUPs_1, y = Env1_Moisture_BLUP))+
+  geom_point()
+
+read_csv("/Users/michael/Downloads/Moisture_Prediction_Tables - Table_S1 (2).csv", skip = 1) %>%
+  select(1,8) %>%
+  ggplot(aes(x = Env1_Moisture_BLUP))+
+  geom_histogram()+
+  xlim(c(-5,5))
+
+read_csv("/Users/michael/Downloads/Moisture_Prediction_Tables - Table_S1 (2).csv", skip = 1) %>%
+  select(1,8) %>%
+  rename(taxa = Genotype) %>%
+  full_join(Env_1_Y_Match) %>%
+  filter(!is.na(BLUPs_1)) %>%
+  filter(!is.na(Env1_Moisture_BLUP)) %>%
+  ggplot(aes(x = BLUPs_1))+
+  geom_histogram()+
+  xlim(c(-5,5))

@@ -5,6 +5,7 @@
 #############
 # Libraries #
 #############
+library("tidyverse")
 library("multtest")
 library("snpStats")
 library("gplots")
@@ -17,11 +18,23 @@ library("scatterplot3d")
 library("bigmemory")
 library("biganalytics")
 
+###############################
+# Getting Shell Script Inputs #
+###############################
+cli_arg <- commandArgs(trailingOnly = TRUE)
+iter <- as.numeric(cli_arg[1])
+#iter = 1
+
+#########################
+# Set Working Directory #
+#########################
+setwd(paste0("/home/hirschc1/burns756/Machine_Learning/Data/Environment_", iter))
+
 ##############################
 # Sourcing GAPIT and FarmCPU #
 ##############################
-source("http://www.zzlab.net/GAPIT/emma.txt")
-source("http://www.zzlab.net/GAPIT/gapit_functions.txt")
+source("http://zzlab.net/GAPIT/emma.txt")
+source("http://zzlab.net/GAPIT/gapit_functions.txt")
 source("http://zzlab.net/FarmCPU/FarmCPU_functions.txt")
 
 ########################
@@ -30,61 +43,33 @@ source("http://zzlab.net/FarmCPU/FarmCPU_functions.txt")
 memory.limit()
 memory.limit(size = 35000)
 
-###############################
-# Getting Shell Script Inputs #
-###############################
-cli_arg <- commandArgs(trailingOnly = TRUE)
-iter <- as.numeric(cli_arg[1])
-
 ################
 # Loading Data #
 ################
-myY <- read.csv(cat("../Data/MyY_Env_", iter, ".csv", sep = ""))
-myGD <- read.big.matrix(cat("myGD_", iter, ".csv", sep = ""),type = "char", head=T)
-myGM <- read.csv(cat("myGM_", iter, ".csv", sep = ""), header=T)
-myPCA <- read.csv(cat("GAPIT.PCA_", iter, ".csv", sep = ""), header=T)
-myPValue <- read.delim(cat("FarmCPU.p.threshold.optimize.moisture_uptake_", iter, ".txt", sep = ""), header = F, sep = "\t")
+myY <- read.csv(paste0("../MyY_Env_", iter, ".csv"), header = T)
+myGD <- read.big.matrix(paste0("../GD_Env_", iter, ".txt"), sep = "\t", type = "char", head=T)
+myGM <- read.delim("../GAPIT.Genotype.map.txt", sep = "\t", header=T)
+myPCA <- read.csv("../GAPIT.PCA.csv", header=T)
+myPValue <- read.delim(paste0("../FarmCPU.p.threshold.optimize.moisture_uptake_", iter, ".txt"), header = F, sep = "\t")
 
-pval <- quantile(myPValue$V1, 0.05)
+pval <- print(sort(myPValue$V1)[ceiling(30*0.05)]) #quantile(myPValue$V1, 0.05)
 
-#######################
-# Mixed Effects Model #
-#######################
-#trait_lmer <- n5000_lmer_data %$%
-#  lmer(SVML_Prediction ~ (1 | Genotype) + (1 | Env/Rep) + (1 | Rep/Block) + (1 | Genotype:Env), REML = T) # (1|Env) is left out of the equation since the nesting with rep variable accounts for env.  If you add env itself to the equation, ranova wont work since there are technically two environments. After comparing with and without env models, the addition of env only accounts for 0.000012 units of stdev.
-
-####################
-# Extracting BLUPs #
-####################
-#summary(trait_lmer, correlation=FALSE)
-#random_effects <- ranef(trait_lmer) # Write out BLUPs for Genotypes
-#BLUPs <- random_effects$Genotype
-
-########################
-# Setting Up Variables #
-########################
-#myY <- tibble(taxa = rownames(BLUPs),
-#              Moisture_Uptake_BLUPs = BLUPs[[1]])
-
-#filtered_myY <- myY %>%
-#  filter(taxa %in% myPCA$taxa)
-
-#matched_myY <- tibble(taxa = myPCA$taxa) %>%
-#  full_join(filtered_myY) %>%
-#  as.data.frame() %>%
-#  write_csv("my_Y.csv")
+#########################
+# Filtering PCA Dataset #
+#########################
+newPCA <- myPCA %>%
+  filter(taxa %in% myY$taxa) %>%
+  as_data_frame()
 
 ######
 # QC #
 ######
 length(myY$taxa)
-length(myPCA$taxa)
-sum(myY$taxa == myPCA$taxa) #should all be 408
-
-#tibble(filtered_y = filtered_myY$taxa, 
-#       pca_taxa = myPCA$taxa,
-#       y_taxa = matched_myY$taxa) %>%
-#  write_csv("FarmCPU_Taxa_Order_QC.csv")
+length(newPCA$taxa)
+sum(myY$taxa == newPCA$taxa) 
+paste("P value: ", pval)
+write(newPCA$taxa, paste("PCA_taxa_", iter, ".csv"))
+write(myY$taxa, paste("MyY_Taxa_", iter, ".csv"))
 
 #################
 # FarmCPU Model #
@@ -93,11 +78,13 @@ myFarmCPU <- FarmCPU(
   Y=myY, #phenotype
   GD=myGD, #Genotype matrix
   GM=myGM, #Genotypic map
-  CV=myPCA[,-1], #Covariate variables (First 5 PCAs from GAPIT); taxa should not be included.
-  threshold.output=0.01, #P value smaller than threshold.output will be output in GWAS table
+  CV=newPCA[,-1], #Covariate variables (First 5 PCAs from GAPIT); taxa should not be included.
+  threshold.output=1, #P value smaller than threshold.output will be output in GWAS table
   p.threshold=pval,
   MAF.calculate=TRUE, #Calculate minor allele frequency (MAF) or not, if set to TRUE, the SNPs with a lower MAF (<maf.threshold) will be deleted
   method.bin="optimum",
   maf.threshold=0.05, #When MAF.calculate=TRUE, the SNPs with a lower MAF (<maf.threshold) will be deleted
-  maxLoop=50 #Maximum number of iterations allowed
+  maxLoop=50, #Maximum number of iterations allowed
+  memo = paste("Env_", iter, sep = "") #Add extension to file name for parallel runs
 )
+

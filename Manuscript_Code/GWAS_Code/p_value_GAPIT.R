@@ -20,8 +20,8 @@ library("biganalytics")
 ##############################
 # Sourcing GAPIT and FarmCPU #
 ##############################
-source("http://www.zzlab.net/GAPIT/emma.txt")
-source("http://www.zzlab.net/GAPIT/gapit_functions.txt")
+source("http://zzlab.net/GAPIT/emma.txt")
+source("http://zzlab.net/GAPIT/gapit_functions.txt")
 source("http://zzlab.net/FarmCPU/FarmCPU_functions.txt")
 
 ########################
@@ -35,15 +35,19 @@ memory.limit(size = 35000)
 ###############################
 cli_arg <- commandArgs(trailingOnly = TRUE)
 iter <- as.numeric(cli_arg[1])
+#iter = 1
+
+#########################
+# Set Working Directory #
+#########################
+setwd("/home/hirschc1/burns756/Machine_Learning/Data/")
 
 ################
 # Loading Data #
 ################
-#n5000_lmer_data <- read.csv("../Data/N5000_Master_With_Predictions.csv")
-#snp_data <- read.table("../Data/christine_common_final.hmp.txt", head = F) # Had to increase device memory allocation to R in order to get this loaded.
-myY <- read.csv(cat("../Data/MyY_Env_", iter, ".csv", sep = ""))
-myGD <- read.big.matrix(cat("myGD_", iter, ".csv", sep = ""),type = "char", head=T)
-myGM <- read.csv(cat("myGM_", iter, ".csv", sep = ""), header=T)
+myY <- read.csv(paste0("MyY_Env_", iter, ".csv"), header = T)
+myGD <- read.big.matrix(paste0("GD_Env_", iter, ".txt"), sep = "\t",type = "char", head=T)
+myGM <- read.delim("GAPIT.Genotype.map.txt", sep = "\t", header=T)
 
 #################################
 # Determining P-Value Threshold #
@@ -52,6 +56,6 @@ FarmCPU.P.Threshold(
   Y=myY, #only two columns allowed, the first column is taxa name and the second is phenotype value
   GD=myGD,
   GM=myGM,
-  trait=cat("moisture_uptake_", iter, sep = ""), #name of the trait, only used for the output file name
-  theRep=100 #number of permutation times
+  trait=paste0("moisture_uptake_", iter), #name of the trait, only used for the output file name
+  theRep=30 #number of permutation times
 )
