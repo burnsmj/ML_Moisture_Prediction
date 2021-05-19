@@ -19,7 +19,7 @@ for ($i=1; $i<=5; ++$i){ # For i in 1 through 5 (adding 1 to i each iteration) d
 	######################
 	# Opening File Paths #
 	######################
-	open(my $Env_in_fh, '<', "MyY_Taxa_Env_$i.txt") or die("Env Dataset Couldn't be Found\n"); # Open path to environment taxa
+	open(my $Env_in_fh, '<', "MyY_Env_$i.csv") or die("Env Dataset Couldn't be Found\n"); # Open path to environment taxa
 	open(my $GD_in_fh, '<', "GAPIT.Genotype.Numerical.txt") or die("GD Dataset Couldn't be Found\n"); # Open path to genotypic dataset -- Change this later!
 	open(my $Env_out_fh, '>', "GD_Env_$i.txt") or die("Output Dataset Couldn't be Found\n"); # Open path to output file
 
@@ -40,8 +40,10 @@ for ($i=1; $i<=5; ++$i){ # For i in 1 through 5 (adding 1 to i each iteration) d
 	# Matching Keys and Values in Environment Taxa Dataset #
 	########################################################
 	while(my $key = <$Env_in_fh>){ # While there are lines in environment taxa dataset...
-		chomp $key; # Remove tailing \n 
-		print $Env_out_fh $key, "\t", $env_hash{$key}, "\n"; # Print matches in order of Key    Numerical Data \n
+		chomp $key; # Remove tailing \n
+		my @fields = split(',', $key);
+		my $taxa_key = $fields[0]; 
+		print $Env_out_fh $taxa_key, "\t", $env_hash{$taxa_key}, "\n"; # Print matches in order of Key    Numerical Data \n
 	}
 
 	####################
