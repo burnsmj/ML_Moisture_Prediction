@@ -1343,7 +1343,7 @@ n5000_lmer_data_traits <- read_csv("../Data/N5000_Master_With_Predictions.csv") 
 
 registerDoParallel(cores = 4) # Use 4 cores in the coming section of code
 trait_var_source_n5000 <- foreach(i = 6:11, .combine = rbind) %dopar% { # In parallel, do the following and combine the rows
-  trait_lmer <- lmer(n5000_lmer_data_traits[[i]] ~ (1 | Genotype) + (1 | Env/Rep) + (1 | Rep/Block) + (1 | Genotype:Env),  
+  trait_lmer <- lmer(n5000_lmer_data_traits[[i]] ~ (1 | Genotype) + (1 | Env/Rep/Block) + (1 | Genotype:Env),  
                      data = n5000_lmer_data_traits, REML = T) # This is the mixed linear model based on the experimental design
   
   var_source <- tidy(ranova(trait_lmer)) %>% # ranova iterates through removing each variableto determine its PVE.  tidy just turns it into a tibble
@@ -1384,26 +1384,6 @@ trait_var_source_n5000 %>% # Use the dataset collected above
          Parameter == "Residual") %>% # Only keep the parameters used in entry-mean heritability calculation
   pivot_wider(id_cols = -c(Parameter, Variance), names_from = Parameter, values_from = Variance) %>% # Change to a wide format for calculations
   mutate(Heritability = Genotype / (Genotype + (`Genotype:Env` / n_env) + (Residual / (n_env * n_reps)))) # Calculate heritability
-```
-Ask Jonathan if he only used the subset that had genotypic data.
-
-```{r jonathan's heritability calculations}
-registerDoParallel(cores = 4)
-trait_var_source_n5000_j <- foreach(i = 6:11, .combine = rbind) %dopar% {
-  trait_lmer <- lmer(n5000_lmer_data_traits[[i]] ~ (1 | Genotype) + (1 | Env) + (1 | Env/Rep) + (1 | Rep/Block) + (1 | Genotype:Env), 
-                     data = n5000_lmer_data_traits, REML = T)
-  
-  model_variances <- as.data.frame(VarCorr(trait_lmer))
-  h2 <- model_variances$vcov[2]/(model_variances$vcov[2]+(model_variances$vcov[1]/5)+(model_variances$vcov[8]/10))
-  
-  return(list(
-    Trait = colnames(n5000_lmer_data_traits[i]),
-    h2 = h2
-  ))
-}
-stopImplicitCluster()
-
-trait_var_source_n5000_j
 ```
 
 ```{r heritability of composition and moisture uptake in N400 dataset}
