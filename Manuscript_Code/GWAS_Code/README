@@ -28,6 +28,25 @@ GWAS_QC.sh
   - A file to run QC on the SNP datasets (includes checking the number of lines in common, the number of taxa in each, etc)
   - Requires MyY_Env_X.csv and GD_Env_X.txt
   - Produces MyY_Taxa_Env_X.txt (other files are created, but not important).
+
+Plink_Script.sh
+  - Uses plink to turn a plink file set into a bed file.
+  - Requires a binary plink dataset.
+  - Produces a bedfile of the binary hapmap.
+  - This script was used separately for both the full dataset as well as the significant SNP dataset.
+
+GCTA_GRM_Script.sh
+  - Uses gcta64 to turn a bedfile into a grm file set. 
+  - Requires a bedfile.
+  - Produces a GRM file set.
+  - This script was used separately for both the full dataset as well as the significant SNP dataset.
+  
+GCTA_PVE_Script.sh
+  - Uses gcta64 to calculate the variance explained by a SNP dataset.
+  - Requires a GRM file set and a phenotype file with the correct family ID column (in this case a column of -9).
+  - Produces a log file from which the PVE (V(G) / Vp) can be extracted. 
+  - This script was used separately for both the full dataset as well as the significant SNP dataset.
+
   
 In All of the above scripts, an X in the name of a file indicates a value of 1-5.
 
@@ -38,3 +57,11 @@ These scripts should be run in the following order:
 4. GWAS_QC.sh (Not Required)
 5. p_value_GAPIT.R
 6. Moisutre_Uptake_FarmCPU.R
+7. In TASSEL GUI - binarize the SNP calls
+8. Save the hapmap dataset as a hapmap
+9. Open the binary hapmap and export as a plink file
+10. Plink_Script.sh
+11. GCTA_GRM Script
+12. GCTA_PVE_Script.sh
+13. Manually extract Vg / Vp
+14. Repeat 7 - 13 for just the significant SNPs
