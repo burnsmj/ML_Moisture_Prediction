@@ -63,4 +63,4 @@ These scripts should be run in the following order:
 10. GCTA_GRM Script
 11. GCTA_PVE_Script.sh
 12. Manually extract Vg / Vp
-13. Repeat 7 - 13 for just the significant SNPs
+13. Repeat 7 - 13 for just the significant SNPs (perl script and shell loop are provided as Sig_SNP_Splitter scripts)
