@@ -55,3 +55,36 @@ doi: 10.1007/s00122-021-03926-8.
     - A directory of the data used to create the supplemental tables in the manuscript.
   - Note: HapMap data is not included in this directory due to its size. Please see O’Connor et al. 2020 for the hapmap data used.
  
+## Pipeline:
+The following scripts were utilized in this manuscript and were run locally unless otherwise specified.
+
+  - Data Preparation:
+    - Digital_Creation_of_Mastersheet.Rmd
+    - digital_cleaning_n5000.Rmd
+    - ML_Master_Validation_Dataset.Rmd
+    - Digitally_Cleaning_Training_Set.Rmd
+      - Used to create manuscript ready table.
+  - Machine Learning:
+    - MSI_Macro_ML.R
+      - Run on HPC
+    - MSI_Spectra_ML_NoBound_RandomSplit_RandomCV.R
+      - Run on HPC
+    - MSI_Spectra_ML_NoBound_GenoSplit_GenoCV.R
+      - Run on HPC
+    - Non-Parallel_LC.R
+  - GWAS:
+    - Numerical_GAPIT.R
+      - Run on HPC
+    - Splitting_BLUPs_by_Env.R
+      - Run on HPC
+    - GWAS_QC.sh
+      - Run on HPC
+    - GWAS_Env_Splitter.pl
+      - Run on HPC
+    - p_value_GAPIT.R
+      - Run on HPC
+    - Moisture_Uptake_FarmCPU.R
+      - Run on HPC
+  - Data Analysis:
+    - Moisture_Uptake_Prediction_Paper_Figures.Rmd (Aspects of this script were created and used throughout the pipeline to inform decisions, but as it is set up, it can run after the pipeline entirely)
+    
