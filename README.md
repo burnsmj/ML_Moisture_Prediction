@@ -1,7 +1,7 @@
 # Nixtamalization Moisture Content Prediction in a Maize Inbred Diversity Panel
 Michael Burns <br> University of Minnesota - Applied Plant Sciences
 
-## Synopsis:
+## Purpose:
 Maize is a critical crop in the United States, primarily used for livestock feed and ethanol production rather than direct 
 human consumption. Consequently, research into food-grade maize varieties has been limited. Food-grade maize is typically 
 selected from existing No. 2 yellow dent germplasm. This narrow selection limits the ability to enhance specific traits 
