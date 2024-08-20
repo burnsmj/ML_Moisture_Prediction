@@ -1338,72 +1338,52 @@ n5000_data_norm_var_exp %>%
 
 
 ```{r heritability of composition and moisture uptake predictions in N5000 dataset}
-n5000_lmer_data_traits <- read_csv("../Data/N5000_Master_With_Predictions.csv") %>%
-  select(c(1:10, 152))
+n5000_lmer_data_traits <- read_csv("../Data/N5000_Master_With_Predictions.csv") %>% # Read in trait dataset
+  select(c(1:10, 152)) # Select compositional traits, experimental design variables, and moisture content prediction
 
-registerDoParallel(cores = 4)
-trait_var_source_n5000 <- foreach(i = 6:11, .combine = rbind) %dopar% {
-  trait_lmer <- lmer(n5000_lmer_data_traits[[i]] ~ (1 | Genotype) + (1 | Env/Rep) + (1 | Rep/Block) + (1 | Genotype:Env), 
-                     data = n5000_lmer_data_traits, REML = T)
+registerDoParallel(cores = 4) # Use 4 cores in the coming section of code
+trait_var_source_n5000 <- foreach(i = 6:11, .combine = rbind) %dopar% { # In parallel, do the following and combine the rows
+  trait_lmer <- lmer(n5000_lmer_data_traits[[i]] ~ (1 | Genotype) + (1 | Env/Rep/Block) + (1 | Genotype:Env),  
+                     data = n5000_lmer_data_traits, REML = T) # This is the mixed linear model based on the experimental design
   
-  var_source <- tidy(ranova(trait_lmer)) %>%
-    select(term, p.value) %>%
-    filter(term != "<none>") %>%
-    mutate(term = str_remove_all(string = term, pattern = "[(,1, ,|,)]")) %>%
-    rename(Parameter = term)
+  var_source <- tidy(ranova(trait_lmer)) %>% # ranova iterates through removing each variableto determine its PVE.  tidy just turns it into a tibble
+    select(term, p.value) %>% # extract the variable and the p value
+    filter(term != "<none>") %>% # remove any variables listed as <none>
+    mutate(term = str_remove_all(string = term, pattern = "[(,1, ,|,)]")) %>% # Remove certain patterns from the dataset
+    rename(Parameter = term) # Rename the term column (experimental variable) to parameter
   
-  var_exp <- summary(trait_lmer)[[13]] %>%
-    as_data_frame() %>%
-    select(grp, vcov) %>%
+  var_exp <- summary(trait_lmer)[[13]] %>% # Take a summary of the mixed linear model, specifically the PVE information
+    as_data_frame() %>% # Turn the dataset into a data frame
+    select(grp, vcov) %>% # Select the group and variance column
     rename(Parameter = grp, 
-          var = vcov) %>%
+          var = vcov) %>% # Rename the columns to match above
     mutate(total_var = sum(var),
-           Percent_Var = (var/total_var) * 100) %>%
-    select(Parameter, var, Percent_Var) %>%
-    full_join(var_source) %>%
-    mutate(Trait = colnames(n5000_lmer_data_traits[i]))
+           Percent_Var = (var/total_var) * 100) %>% # Calculate PVE
+    select(Parameter, var, Percent_Var) %>% # Select only the relevant columns
+    full_join(var_source) %>% # Merge the dataset with var_source
+    mutate(Trait = colnames(n5000_lmer_data_traits[i])) # Give the rows a value based on what trait is being considered.
   
   return(list(
     Parameter = var_exp$Parameter,
     Variance = var_exp$var,
     Percent_Variance = var_exp$Percent_Var,
     Trait = var_exp$Trait
-  ))
+  )) # This returns all of the important information collected in the parallel loop
 }
-stopImplicitCluster()
-beep(8)
+stopImplicitCluster() # Stop parallel loop
+#beep(8) # Makes a sound when the loop is completed
 
-trait_var_source_n5000 %>%
-  as_tibble() %>%
-  unnest(cols = Parameter, Variance, Percent_Variance, Trait) %>%
-  mutate(n_env = 5,
-         n_reps = 2) %>%
-  select(Parameter, Variance, Trait, n_env, n_reps) %>%
-  filter(Parameter == "Genotype" |
+trait_var_source_n5000 %>% # Use the dataset collected above
+  as_tibble() %>% # Turn it into a tibble
+  unnest(cols = Parameter, Variance, Percent_Variance, Trait) %>% # Unnest all of the columns to make them usable
+  mutate(n_env = 5, # Add the number of environments in the study
+         n_reps = 2) %>% # Add the number of reps per environment
+  select(Parameter, Variance, Trait, n_env, n_reps) %>% # Select relevant columns
+  filter(Parameter == "Genotype" | 
          Parameter == "Genotype:Env" |
-         Parameter == "Residual") %>%
-  pivot_wider(id_cols = -c(Parameter, Variance), names_from = Parameter, values_from = Variance) %>%
-  mutate(Heritability = Genotype / (Genotype + (`Genotype:Env` / n_env) + (Residual / (n_env * n_reps))))
-```
-Ask Jonathan if he only used the subset that had genotypic data.
-
-```{r jonathan's heritability calculations}
-registerDoParallel(cores = 4)
-trait_var_source_n5000_j <- foreach(i = 6:11, .combine = rbind) %dopar% {
-  trait_lmer <- lmer(n5000_lmer_data_traits[[i]] ~ (1 | Genotype) + (1 | Env) + (1 | Env/Rep) + (1 | Rep/Block) + (1 | Genotype:Env), 
-                     data = n5000_lmer_data_traits, REML = T)
-  
-  model_variances <- as.data.frame(VarCorr(trait_lmer))
-  h2 <- model_variances$vcov[2]/(model_variances$vcov[2]+(model_variances$vcov[1]/5)+(model_variances$vcov[8]/10))
-  
-  return(list(
-    Trait = colnames(n5000_lmer_data_traits[i]),
-    h2 = h2
-  ))
-}
-stopImplicitCluster()
-
-trait_var_source_n5000_j
+         Parameter == "Residual") %>% # Only keep the parameters used in entry-mean heritability calculation
+  pivot_wider(id_cols = -c(Parameter, Variance), names_from = Parameter, values_from = Variance) %>% # Change to a wide format for calculations
+  mutate(Heritability = Genotype / (Genotype + (`Genotype:Env` / n_env) + (Residual / (n_env * n_reps)))) # Calculate heritability
 ```
 
 ```{r heritability of composition and moisture uptake in N400 dataset}
