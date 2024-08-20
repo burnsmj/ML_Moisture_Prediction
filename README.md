@@ -33,13 +33,25 @@ doi: 10.1007/s00122-021-03926-8.
 
 ## Repository Files:
 - Manuscript_Code
-  - All code used in the creation and analysis of the machine learning model to predict moisture content after nixtamalization.
+  - Data Cleaning
+    - Scripts for cleaning spectroscopic and cook test data.
+  - Data_Analysis
+    - The Rmarkdown that contains the analyses performed in the manuscript.
+  - GWAS_Code
+    - The code used to run GWAS on the WiDiv panel on the Minnesota Supercomputing Institute's High Performance Computing Clusters.
+    - The general pipeline can be found in the readme within this directory.
+  - Machine_Learning
+    - Scripts developed to train many machine learning models on the Minnesota Supercomputing Institute's High Performance Computing Clusters.
+  - Moisture_Uptake_Prediction
+    - A proof of concept shiny application to that can be used to predict nixtamalization moisture content in inbred maize samples.
+    - Directions for use can be found in the repository.
+    - A more complete and applicable version of this application is coming in a future manuscript.
 - Data
   - Raw_Data
     - A directory of the raw data collected during the experiment.  
   - Cleaned_Data
-    - A directory of the cleaned data created during the pipeline
+    - A directory of the cleaned data created during the analysis.
   - Supplemental_Table_Data
-    - A directory of the data used to create the supplemental tables in the manuscript
+    - A directory of the data used to create the supplemental tables in the manuscript.
   - Note: HapMap data is not included in this directory due to its size. Please see O’Connor et al. 2020 for the hapmap data used.
  
