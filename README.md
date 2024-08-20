@@ -35,5 +35,11 @@ doi: 10.1007/s00122-021-03926-8.
 - Manuscript_Code
   - All code used in the creation and analysis of the machine learning model to predict moisture content after nixtamalization.
 - Data
-  - All relevant data used to create the machine learning model and created from the analysis of the machine learning model.
+  - Raw_Data
+    - A directory of the raw data collected during the experiment.  
+  - Cleaned_Data
+    - A directory of the cleaned data created during the pipeline
+  - Supplemental_Table_Data
+    - A directory of the data used to create the supplemental tables in the manuscript
+  - Note: HapMap data is not included in this directory due to its size. Please see O’Connor et al. 2020 for the hapmap data used.
  
